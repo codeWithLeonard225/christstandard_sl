@@ -11,6 +11,12 @@ const FeesCostPage = () => {
     const [searchClass, setSearchClass] = useState("");
     const [selectedClass, setSelectedClass] = useState(null);
 
+    // **********************************************
+    // 1. Define the password for deletion
+    // NOTE: Replace 'secure123' with a complex password or use environment variables!
+    const DELETION_PASSWORD = "secure123"; 
+    // **********************************************
+
     const initialFeeState = useMemo(() => ({
         feeId: uuidv4().slice(0, 10).toUpperCase(),
         className: "",
@@ -143,12 +149,32 @@ const FeesCostPage = () => {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (window.confirm("Are you sure you want to delete this fee?")) {
-            await deleteDoc(doc(db, "FeesCost", id));
-            toast.success("Fee deleted successfully!");
+    // *****************************************************************
+    // 2. UPDATED handleDelete function to include password check
+    // *****************************************************************
+    const handleDelete = async (id, className) => {
+        // Step 1: Confirm intent
+        if (!window.confirm(`Are you sure you want to delete the fee structure for ${className}?`)) {
+            return;
+        }
+
+        // Step 2: Prompt for password
+        const password = window.prompt("Please enter the deletion password to confirm:");
+
+        // Step 3: Check password
+        if (password === DELETION_PASSWORD) {
+            try {
+                await deleteDoc(doc(db, "FeesCost", id));
+                toast.success("Fee deleted successfully!");
+            } catch (error) {
+                console.error("Error deleting document:", error);
+                toast.error("Failed to delete fee. See console for details.");
+            }
+        } else {
+            toast.error("Incorrect password. Deletion cancelled.");
         }
     };
+    // *****************************************************************
 
 
     return (
@@ -254,7 +280,6 @@ const FeesCostPage = () => {
             </form>
 
             {/* Fees Table */}
-            {/* ... (Table display remains the same) ... */}
             <div className="bg-white p-6 rounded-xl shadow-lg max-w-full overflow-x-auto">
                 <h3 className="text-lg font-bold mb-4">Existing Fees</h3>
                 <table className="min-w-full divide-y divide-gray-200">
@@ -280,7 +305,14 @@ const FeesCostPage = () => {
                                 <td className="px-3 py-2 text-sm text-gray-700">{fee.academicYear}</td>
                                 <td className="px-3 py-2 text-sm text-gray-700 space-x-2">
                                     <button type="button" onClick={() => handleEdit(fee)} className="text-orange-600 hover:text-orange-800">Edit</button>
-                                    <button type="button" onClick={() => handleDelete(fee.id)} className="text-red-600 hover:text-red-800">Delete</button>
+                                    {/* UPDATED: Pass className for better confirmation message */}
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleDelete(fee.id, fee.className)} 
+                                        className="text-red-600 hover:text-red-800"
+                                    >
+                                        Delete
+                                    </button>
                                 </td>
                             </tr>
                         ))}

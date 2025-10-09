@@ -232,9 +232,8 @@ const TeacherGradesPage = () => {
             <tr>
               <th className="border px-3 py-2 text-left">#</th>
               <th className="border px-3 py-2 text-left">Student Name</th>
-              <th className="border px-3 py-2 text-left">Student ID</th>
-              <th className="border px-3 py-2 text-left">Class</th>
               <th className="border px-3 py-2 text-left">Grade</th>
+              <th className="border px-3 py-2 text-left">Class</th>
             </tr>
           </thead>
           <tbody>
@@ -249,8 +248,6 @@ const TeacherGradesPage = () => {
                 <tr key={pupil.id} className="hover:bg-gray-50">
                   <td className="border px-3 py-2">{index + 1}</td>
                   <td className="border px-3 py-2">{pupil.studentName}</td>
-                  <td className="border px-3 py-2">{pupil.studentID}</td>
-                  <td className="border px-3 py-2">{pupil.class}</td>
                   <td className="border px-3 py-2">
                     <input
                       type="number"
@@ -262,6 +259,7 @@ const TeacherGradesPage = () => {
                       disabled={alreadySubmitted || submitting}
                     />
                   </td>
+                  <td className="border px-3 py-2">{pupil.class}</td>
                 </tr>
               ))
             )}

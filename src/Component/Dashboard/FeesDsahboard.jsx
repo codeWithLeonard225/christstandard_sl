@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { db } from "../../../firebase";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import {
@@ -13,38 +13,47 @@ import {
 import { toast } from "react-toastify";
 
 export default function FeesDashboard() {
-  const [pupilsData, setPupilsData] = useState([]);
+  const [pupilsData, setPupilsData] = useState([]); // For chart
   const [academicYear, setAcademicYear] = useState("");
   const [allYears, setAllYears] = useState([]);
   const [feesOutstanding, setFeesOutstanding] = useState([]);
   const [feesCost, setFeesCost] = useState([]);
+  const [allPupils, setAllPupils] = useState([]);
   const [selectedClass, setSelectedClass] = useState("");
 
-  // Pagination
+  // Pagination states
   const [outstandingLimit, setOutstandingLimit] = useState(7);
   const [outstandingPage, setOutstandingPage] = useState(1);
-  const [feesListLimit, setFeesListLimit] = useState(10);
-  const [feesPage, setFeesPage] = useState(1);
+  const [pupilsListLimit, setPupilsListLimit] = useState(10);
+  const [pupilsPage, setPupilsPage] = useState(1);
 
-  // --- Fetch academic years dynamically ---
+  // --- Fetch all academic years ---
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "PupilsReg"), (snapshot) => {
       const pupils = snapshot.docs.map((doc) => doc.data());
       const years = [...new Set(pupils.map((p) => p.academicYear))].sort().reverse();
       setAllYears(years);
-      if (!academicYear && years.length) setAcademicYear(years[0]);
+      if (!academicYear && years.length) {
+        setAcademicYear(years[0]);
+      }
     });
     return () => unsub();
   }, [academicYear]);
 
-  // --- Pupils per Class chart ---
+  // --- Fetch pupils per academic year ---
   useEffect(() => {
     if (!academicYear) return;
     const pupilsRef = collection(db, "PupilsReg");
     const q = query(pupilsRef, where("academicYear", "==", academicYear));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const pupils = snapshot.docs.map((doc) => doc.data());
+      const pupils = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setAllPupils(pupils);
+
+      // Bar chart data
       const counts = {};
       pupils.forEach((pupil) => {
         const cls = pupil.class || "Unknown";
@@ -62,10 +71,8 @@ export default function FeesDashboard() {
   // --- Fetch FeesCost ---
   useEffect(() => {
     const feesCollectionRef = collection(db, "FeesCost");
-    const q = query(feesCollectionRef);
-
     const unsubscribeFees = onSnapshot(
-      q,
+      feesCollectionRef,
       (snapshot) => {
         const feeList = snapshot.docs.map((doc) => ({
           id: doc.id,
@@ -85,7 +92,6 @@ export default function FeesDashboard() {
   // --- Fetch Receipts & Calculate Outstanding ---
   useEffect(() => {
     if (!academicYear || feesCost.length === 0) return;
-
     const receiptsRef = collection(db, "Receipts");
     const q = query(receiptsRef, where("academicYear", "==", academicYear));
 
@@ -124,35 +130,78 @@ export default function FeesDashboard() {
     return () => unsubscribe();
   }, [academicYear, feesCost]);
 
-  // --- Class options dynamically ---
-  const allClasses = [...new Set(feesOutstanding.map((s) => s.class))].sort();
+  // --- Merge Pupils with Fees and Receipts ---
+  const mergedPupilsWithFees = useMemo(() => {
+    if (allPupils.length === 0) return [];
 
-// --- Filtered lists ---
-const filteredOutstanding = feesOutstanding.filter((s) => s.outstanding > 0);
+    return allPupils.map((pupil) => {
+      const classFee = feesCost.find(
+        (f) => f.academicYear === pupil.academicYear && f.className === pupil.class
+      );
+      const totalFee = classFee ? classFee.totalAmount : 0;
 
-// Fees List shows all students, regardless of outstanding
-const filteredFeesList = selectedClass
-    ? feesOutstanding.filter((s) => s.class === selectedClass)
-    : feesOutstanding;
+      const receipt = feesOutstanding.find(
+        (r) =>
+          r.studentID === pupil.studentID ||
+          r.studentName?.toLowerCase() ===
+            `${pupil.firstName} ${pupil.lastName}`.toLowerCase()
+      );
 
-  // --- Pagination ---
-  const totalOutstandingPages = Math.ceil(filteredOutstanding.length / outstandingLimit) || 1;
+      const totalPaid = receipt ? receipt.totalPaid : 0;
+      const outstanding = totalFee - totalPaid;
+
+      return {
+        ...pupil,
+        totalFee,
+        totalPaid,
+        outstanding,
+      };
+    });
+  }, [allPupils, feesCost, feesOutstanding]);
+
+  // --- Filter class options ---
+  const allClasses = useMemo(() => {
+    return [...new Set(allPupils.map((s) => s.class))].filter(Boolean).sort();
+  }, [allPupils]);
+
+  // --- Filtered Outstanding ---
+  const filteredOutstanding = feesOutstanding.filter((s) => s.outstanding > 0);
+  const totalOutstandingPages =
+    Math.ceil(filteredOutstanding.length / outstandingLimit) || 1;
   const displayedOutstanding = filteredOutstanding.slice(
     (outstandingPage - 1) * outstandingLimit,
     outstandingPage * outstandingLimit
   );
 
-  const totalFeesPages = Math.ceil(filteredFeesList.length / feesListLimit) || 1;
-  const displayedFees = filteredFeesList.slice(
-    (feesPage - 1) * feesListLimit,
-    feesPage * feesListLimit
+  // --- Filtered Pupils for right side ---
+  const filteredPupilsList = useMemo(() => {
+    return selectedClass
+      ? mergedPupilsWithFees.filter((s) => s.class === selectedClass)
+      : mergedPupilsWithFees;
+  }, [mergedPupilsWithFees, selectedClass]);
+
+  // --- Gender Breakdown ---
+  const genderBreakdown = useMemo(() => {
+    const male = filteredPupilsList.filter(
+      (p) => p.gender?.toLowerCase() === "male"
+    ).length;
+    const female = filteredPupilsList.filter(
+      (p) => p.gender?.toLowerCase() === "female"
+    ).length;
+    return { male, female, total: filteredPupilsList.length };
+  }, [filteredPupilsList]);
+
+  const totalPupilsPages = Math.ceil(filteredPupilsList.length / pupilsListLimit) || 1;
+  const displayedPupils = filteredPupilsList.slice(
+    (pupilsPage - 1) * pupilsListLimit,
+    pupilsPage * pupilsListLimit
   );
 
   return (
     <div className="flex flex-col md:flex-row w-full h-screen">
-      {/* LEFT SIDE: Fees Outstanding */}
+      {/* LEFT SIDE */}
       <div className="hidden md:flex md:w-[70%] flex-col p-4 space-y-4">
-        {/* Pupils per class chart */}
+        {/* Pupils Per Class */}
         <div className="flex-1 bg-red-300 p-4 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-xl font-bold">Pupils Per Class</h1>
@@ -183,7 +232,7 @@ const filteredFeesList = selectedClass
           )}
         </div>
 
-        {/* Fees Outstanding Table */}
+        {/* Fees Outstanding */}
         <div className="flex-1 bg-yellow-300 p-4 rounded-lg shadow-md flex flex-col">
           <div className="flex justify-between items-center mb-2">
             <h1 className="text-xl font-bold">Fees Outstanding</h1>
@@ -195,10 +244,11 @@ const filteredFeesList = selectedClass
               }}
               className="p-1 border rounded bg-white"
             >
-              <option value={5}>5</option>
-              <option value={7}>7</option>
-              <option value={10}>10</option>
-              <option value={15}>15</option>
+              {[5, 7, 10, 15].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -240,7 +290,9 @@ const filteredFeesList = selectedClass
               Page {outstandingPage} of {totalOutstandingPages}
             </span>
             <button
-              onClick={() => setOutstandingPage((p) => Math.min(p + 1, totalOutstandingPages))}
+              onClick={() =>
+                setOutstandingPage((p) => Math.min(p + 1, totalOutstandingPages))
+              }
               disabled={outstandingPage === totalOutstandingPages}
               className="px-3 py-1 bg-white rounded shadow disabled:opacity-50"
             >
@@ -250,15 +302,15 @@ const filteredFeesList = selectedClass
         </div>
       </div>
 
-      {/* RIGHT SIDE: Fees List Table */}
-      <div className="md:w-[30%] bg-blue-300 flex flex-col border-lw-full md:w-[30%] bg-blue-300 flex flex-col border-l">
+      {/* RIGHT SIDE */}
+      <div className="md:w-[30%] bg-blue-300 flex flex-col border-l">
         <div className="p-4 border-b border-blue-400 sticky top-0 bg-blue-300 z-10 flex justify-between items-center">
-          <h1 className="text-xl font-bold">Fees List</h1>
+          <h1 className="text-xl font-bold">Pupil Fees List</h1>
           <select
             value={selectedClass}
             onChange={(e) => {
               setSelectedClass(e.target.value);
-              setFeesPage(1);
+              setPupilsPage(1);
             }}
             className="p-1 border rounded bg-white text-black"
           >
@@ -271,52 +323,66 @@ const filteredFeesList = selectedClass
           </select>
         </div>
 
-        <div className="p-2 bg-blue-200 sticky top-[52px] z-10 flex items-center gap-2">
+        {/* Gender Summary */}
+        <div className="p-2 border-b border-blue-400 bg-blue-100 sticky top-[64px] z-10 flex justify-between text-sm font-semibold">
+          <p>Total: <span className="text-blue-700">{genderBreakdown.total}</span></p>
+          <p>Male: <span className="text-blue-700">{genderBreakdown.male}</span></p>
+          <p>Female: <span className="text-pink-700">{genderBreakdown.female}</span></p>
+        </div>
+
+        {/* Limit */}
+        <div className="p-2 bg-blue-200 sticky top-[100px] z-10 flex items-center gap-2">
           <label className="text-sm">Show:</label>
           <select
-            value={feesListLimit}
+            value={pupilsListLimit}
             onChange={(e) => {
-              setFeesListLimit(Number(e.target.value));
-              setFeesPage(1);
+              setPupilsListLimit(Number(e.target.value));
+              setPupilsPage(1);
             }}
             className="px-2 py-1 rounded border"
           >
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={15}>15</option>
-            <option value={20}>20</option>
+            {[5, 10, 15, 20, 30, 40, 50, 60].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
           </select>
           <span className="text-sm">per page</span>
         </div>
 
+        {/* Pupils Table */}
         <div className="flex-1 overflow-y-auto p-4">
           <table className="min-w-full text-left border-collapse">
             <thead>
               <tr>
-                <th className="border p-2">Student</th>
+                <th className="border p-2">Pupil Name</th>
                 <th className="border p-2">Class</th>
-                <th className="border p-2">Total Fee</th>
+                {/* <th className="border p-2">Total Fee</th> */}
                 <th className="border p-2">Paid</th>
-                <th className="border p-2">Outstanding</th>
+                <th className="border p-2">Bal</th>
               </tr>
             </thead>
             <tbody>
-              {displayedFees.length > 0 ? (
-                displayedFees.map((s) => (
-                  <tr key={s.studentID} className="bg-white">
-                    <td className="border p-2">{s.studentName}</td>
-                    <td className="border p-2">{s.class}</td>
-                    <td className="border p-2">{s.totalFee}</td>
-                    <td className="border p-2">{s.totalPaid}</td>
-                    <td className={`border p-2 ${s.outstanding > 0 ? "text-red-600" : "text-green-600"}`}>
-                      {s.outstanding}
+              {displayedPupils.length > 0 ? (
+                displayedPupils.map((s) => (
+                  <tr key={s.id || s.studentID} className="bg-white">
+                    <td className="border p-2">
+                      {s.studentName || `${s.firstName} ${s.lastName}`}
                     </td>
+                    <td className="border p-2">{s.class}</td>
+                    {/* <td className="border p-2">{s.totalFee}</td> */}
+                    <td className="border p-2">{s.totalPaid}</td>
+                    <td className="border p-2 text-red-600">{s.outstanding}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="border p-2 text-center text-gray-700">
-                    No records found.
+                  <td
+                    colSpan={5}
+                    className="border p-2 text-center text-gray-700"
+                  >
+                    No pupils found
+                    {selectedClass ? ` in ${selectedClass}` : ""}.
                   </td>
                 </tr>
               )}
@@ -327,18 +393,20 @@ const filteredFeesList = selectedClass
         {/* Pagination */}
         <div className="p-2 border-t border-blue-400 bg-blue-200 flex justify-center items-center gap-3">
           <button
-            onClick={() => setFeesPage((p) => Math.max(p - 1, 1))}
-            disabled={feesPage === 1}
+            onClick={() => setPupilsPage((p) => Math.max(p - 1, 1))}
+            disabled={pupilsPage === 1}
             className="px-3 py-1 bg-white rounded shadow disabled:opacity-50"
           >
             Prev
           </button>
           <span className="text-sm font-medium">
-            Page {feesPage} of {totalFeesPages}
+            Page {pupilsPage} of {totalPupilsPages}
           </span>
           <button
-            onClick={() => setFeesPage((p) => Math.min(p + 1, totalFeesPages))}
-            disabled={feesPage === totalFeesPages || totalFeesPages === 0}
+            onClick={() =>
+              setPupilsPage((p) => Math.min(p + 1, totalPupilsPages))
+            }
+            disabled={pupilsPage === totalPupilsPages || totalPupilsPages === 0}
             className="px-3 py-1 bg-white rounded shadow disabled:opacity-50"
           >
             Next
