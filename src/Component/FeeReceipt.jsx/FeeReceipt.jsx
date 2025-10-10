@@ -24,7 +24,7 @@ const CLOUD_NAME = "doucdnzij";
 const UPLOAD_PRESET = "Nardone";
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
-const FEE_TYPES = ["Admission Fee", "Tuition Fee", "Exam Fee", "Other"];
+const FEE_TYPES = ["Term 1", "Term 2", "Term 3", "Other"];
 const ADMIN_PASSWORD = "1234"; // Define your admin password
 
 // Helper function to generate a new unique receipt ID
@@ -471,7 +471,7 @@ const handleStudentSelect = async (student) => {
             const formDataObj = new FormData();
             formDataObj.append("file", blob);
             formDataObj.append("upload_preset", UPLOAD_PRESET);
-            formDataObj.append("folder", "Zadet/Receipt_Photos");
+            formDataObj.append("folder", "ChristStandard_Photos");
 
             xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`);
             xhr.send(formDataObj);

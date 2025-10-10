@@ -156,7 +156,7 @@ const PupilPage = () => {
     return (
         <div className="min-h-screen bg-gray-50 p-4 sm:p-8 font-['Inter']">
             <h1 className="text-3xl font-extrabold text-indigo-700 sm:text-4xl text-center mb-6">
-                Pupil Fee Account
+                Christ Standard Secondary School Fee Account
             </h1>
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Pupil Info Card */}

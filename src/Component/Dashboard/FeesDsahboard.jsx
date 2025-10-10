@@ -21,6 +21,9 @@ export default function FeesDashboard() {
   const [allPupils, setAllPupils] = useState([]);
   const [selectedClass, setSelectedClass] = useState("");
 
+  // 🆕 Search state
+  const [searchTerm, setSearchTerm] = useState("");
+
   // Pagination states
   const [outstandingLimit, setOutstandingLimit] = useState(7);
   const [outstandingPage, setOutstandingPage] = useState(1);
@@ -173,12 +176,18 @@ export default function FeesDashboard() {
     outstandingPage * outstandingLimit
   );
 
-  // --- Filtered Pupils for right side ---
+  // --- Filtered Pupils for right side (by class + search) ---
   const filteredPupilsList = useMemo(() => {
-    return selectedClass
-      ? mergedPupilsWithFees.filter((s) => s.class === selectedClass)
-      : mergedPupilsWithFees;
-  }, [mergedPupilsWithFees, selectedClass]);
+    return mergedPupilsWithFees.filter((s) => {
+      const matchClass = selectedClass ? s.class === selectedClass : true;
+      const matchSearch =
+        s.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.class?.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchClass && matchSearch;
+    });
+  }, [mergedPupilsWithFees, selectedClass, searchTerm]);
 
   // --- Gender Breakdown ---
   const genderBreakdown = useMemo(() => {
@@ -304,34 +313,48 @@ export default function FeesDashboard() {
 
       {/* RIGHT SIDE */}
       <div className="md:w-[30%] bg-blue-300 flex flex-col border-l">
-        <div className="p-4 border-b border-blue-400 sticky top-0 bg-blue-300 z-10 flex justify-between items-center">
-          <h1 className="text-xl font-bold">Pupil Fees List</h1>
-          <select
-            value={selectedClass}
+        <div className="p-4 border-b border-blue-400 sticky top-0 bg-blue-300 z-10 flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <h1 className="text-xl font-bold">Pupil Fees List</h1>
+            <select
+              value={selectedClass}
+              onChange={(e) => {
+                setSelectedClass(e.target.value);
+                setPupilsPage(1);
+              }}
+              className="p-1 border rounded bg-white text-black"
+            >
+              <option value="">All Classes</option>
+              {allClasses.map((cls) => (
+                <option key={cls} value={cls}>
+                  {cls}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 🆕 Search Filter */}
+          <input
+            type="text"
+            placeholder="Search pupil or class..."
+            value={searchTerm}
             onChange={(e) => {
-              setSelectedClass(e.target.value);
+              setSearchTerm(e.target.value);
               setPupilsPage(1);
             }}
-            className="p-1 border rounded bg-white text-black"
-          >
-            <option value="">All Classes</option>
-            {allClasses.map((cls) => (
-              <option key={cls} value={cls}>
-                {cls}
-              </option>
-            ))}
-          </select>
+            className="p-2 rounded border w-full text-sm"
+          />
         </div>
 
         {/* Gender Summary */}
-        <div className="p-2 border-b border-blue-400 bg-blue-100 sticky top-[64px] z-10 flex justify-between text-sm font-semibold">
+        <div className="p-2 border-b border-blue-400 bg-blue-100 sticky top-[108px] z-10 flex justify-between text-sm font-semibold">
           <p>Total: <span className="text-blue-700">{genderBreakdown.total}</span></p>
           <p>Male: <span className="text-blue-700">{genderBreakdown.male}</span></p>
           <p>Female: <span className="text-pink-700">{genderBreakdown.female}</span></p>
         </div>
 
         {/* Limit */}
-        <div className="p-2 bg-blue-200 sticky top-[100px] z-10 flex items-center gap-2">
+        <div className="p-2 bg-blue-200 sticky top-[144px] z-10 flex items-center gap-2">
           <label className="text-sm">Show:</label>
           <select
             value={pupilsListLimit}
@@ -357,7 +380,6 @@ export default function FeesDashboard() {
               <tr>
                 <th className="border p-2">Pupil Name</th>
                 <th className="border p-2">Class</th>
-                {/* <th className="border p-2">Total Fee</th> */}
                 <th className="border p-2">Paid</th>
                 <th className="border p-2">Bal</th>
               </tr>
@@ -370,9 +392,14 @@ export default function FeesDashboard() {
                       {s.studentName || `${s.firstName} ${s.lastName}`}
                     </td>
                     <td className="border p-2">{s.class}</td>
-                    {/* <td className="border p-2">{s.totalFee}</td> */}
                     <td className="border p-2">{s.totalPaid}</td>
-                    <td className="border p-2 text-red-600">{s.outstanding}</td>
+                    <td
+                      className={`border p-2 ${
+                        s.outstanding > 0 ? "text-red-600 font-semibold" : "text-green-700"
+                      }`}
+                    >
+                      {s.outstanding}
+                    </td>
                   </tr>
                 ))
               ) : (

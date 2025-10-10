@@ -1,6 +1,6 @@
 // AdminPanel.jsx
 import React, { useState } from "react";
-import { MdDashboard, MdAttachMoney, MdAssignmentTurnedIn, MdKeyboardArrowDown } from "react-icons/md";
+import { MdDashboard, MdAttachMoney, MdAssignmentTurnedIn, MdKeyboardArrowDown, MdMenuBook, MdLibraryBooks } from "react-icons/md";
 import PupilPage from "./PupilPage";
 import IndividualReportCardTerm1 from "./IndividualReportCardTerm1";
 import IndividualReportCardTerm2 from "./IndividualReportCardTerm2";
@@ -23,12 +23,34 @@ const NAV_ITEMS = [
       { key: "term3", label: "Term 3" },
     ],
   },
+    {
+    key: "library",
+    label: "Library",
+    icon: <MdLibraryBooks />, // 📚
+  },
+  {
+    key: "schoolPastQuestions",
+    label: "School Past Questions",
+    icon: <MdMenuBook />, // 📖
+  },
+  // {
+  //   key: "WaecPastQuestions",
+  //   label: "Waec Past Questions",
+  //   icon: <MdAssignmentTurnedIn />,
+  //   children: [
+  //     { key: "npse", label: "NPSE" },
+  //     { key: "bece", label: "BECE" },
+  //     { key: "wassce", label: "WASSCE" },
+  //     { key: "Quiz", label: "Test Yourself (Quiz)" },
+  //     { key: "syllabus", label: "Study syllabus" },
+  //   ],
+  // },
 ];
 
 // Button component
 const Button = ({ variant = "default", onClick, className = "", children }) => {
   let baseStyles =
-    "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-950 disabled:pointer-events-none disabled:opacity-50";
+    "inline-flex items-center justify-start whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-950 disabled:pointer-events-none disabled:opacity-50";
   let variantStyles =
     variant === "default"
       ? "bg-indigo-600 text-white shadow hover:bg-indigo-700"

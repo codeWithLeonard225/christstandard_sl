@@ -72,7 +72,7 @@ const NAV_ITEMS = [
 // --- Button component ---
 const Button = ({ variant = "default", onClick, className = "", children }) => {
   let baseStyles =
-    "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-950 disabled:pointer-events-none disabled:opacity-50";
+    "inline-flex items-center justify-start whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-950 disabled:pointer-events-none disabled:opacity-50";
   let variantStyles =
     variant === "default"
       ? "bg-indigo-600 text-white shadow hover:bg-indigo-700"

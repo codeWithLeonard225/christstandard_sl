@@ -12,15 +12,15 @@ import {
 } from "recharts";
 import { toast } from "react-toastify";
 
-// Renamed component
 export default function RegDashboard() {
-  const [pupilsData, setPupilsData] = useState([]); // Used for Pupils Per Class chart
+  const [pupilsData, setPupilsData] = useState([]);
   const [academicYear, setAcademicYear] = useState("");
   const [allYears, setAllYears] = useState([]);
-  const [feesOutstanding, setFeesOutstanding] = useState([]); // Kept for Fees Outstanding logic
-  const [feesCost, setFeesCost] = useState([]); // Kept for Fees Outstanding logic
-  const [allPupils, setAllPupils] = useState([]); // New state to hold all pupils for the selected year
+  const [feesOutstanding, setFeesOutstanding] = useState([]);
+  const [feesCost, setFeesCost] = useState([]);
+  const [allPupils, setAllPupils] = useState([]);
   const [selectedClass, setSelectedClass] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Pagination for Fees Outstanding
   const [outstandingLimit, setOutstandingLimit] = useState(7);
@@ -34,13 +34,11 @@ export default function RegDashboard() {
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "PupilsReg"), (snapshot) => {
       const pupils = snapshot.docs.map((doc) => doc.data());
-      // Update allPupils from the full snapshot (will be filtered by year in next useEffect)
-      // This is a full snapshot, we'll only use it to get all years first
-      const years = [...new Set(pupils.map((p) => p.academicYear))].sort().reverse();
+      const years = [...new Set(pupils.map((p) => p.academicYear))]
+        .sort()
+        .reverse();
       setAllYears(years);
-      if (!academicYear && years.length) {
-        setAcademicYear(years[0]);
-      }
+      if (!academicYear && years.length) setAcademicYear(years[0]);
     });
     return () => unsub();
   }, [academicYear]);
@@ -53,12 +51,12 @@ export default function RegDashboard() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const pupils = snapshot.docs.map((doc) => ({
-        id: doc.id, // Ensure we have an ID or use studentID as a key
-        ...doc.data()
+        id: doc.id,
+        ...doc.data(),
       }));
-      setAllPupils(pupils); // Set the list of all pupils for the current academic year
+      setAllPupils(pupils);
 
-      // Logic for the Bar Chart (Pupils Per Class)
+      // Chart data
       const counts = {};
       pupils.forEach((pupil) => {
         const cls = pupil.class || "Unknown";
@@ -73,14 +71,11 @@ export default function RegDashboard() {
     return () => unsubscribe();
   }, [academicYear]);
 
-
-  // --- Fetch FeesCost (Retained for Fees Outstanding logic) ---
+  // --- Fetch FeesCost ---
   useEffect(() => {
     const feesCollectionRef = collection(db, "FeesCost");
-    const q = query(feesCollectionRef);
-
     const unsubscribeFees = onSnapshot(
-      q,
+      feesCollectionRef,
       (snapshot) => {
         const feeList = snapshot.docs.map((doc) => ({
           id: doc.id,
@@ -93,11 +88,10 @@ export default function RegDashboard() {
         toast.error("Failed to load fee structures.");
       }
     );
-
     return () => unsubscribeFees();
   }, []);
 
-  // --- Fetch Receipts & Calculate Outstanding (Retained for Fees Outstanding logic) ---
+  // --- Fetch Receipts & Calculate Outstanding ---
   useEffect(() => {
     if (!academicYear || feesCost.length === 0) return;
 
@@ -109,7 +103,6 @@ export default function RegDashboard() {
       const studentMap = {};
 
       receipts.forEach((r) => {
-        // Assuming r.studentID, r.studentName, r.class exist in Receipt
         if (!studentMap[r.studentID]) {
           studentMap[r.studentID] = {
             studentID: r.studentID,
@@ -140,55 +133,70 @@ export default function RegDashboard() {
     return () => unsubscribe();
   }, [academicYear, feesCost]);
 
-
-  // --- Class options dynamically for both sides ---
+  // --- Classes dynamically ---
   const allClasses = useMemo(() => {
     return [...new Set(allPupils.map((s) => s.class))].filter(Boolean).sort();
   }, [allPupils]);
 
-
-  // --- Filtered Outstanding List (Left Side) ---
+  // --- Filtered Outstanding (Left Side) ---
   const filteredOutstanding = feesOutstanding.filter((s) => s.outstanding > 0);
-
-  // --- Pagination for Outstanding List ---
-  const totalOutstandingPages = Math.ceil(filteredOutstanding.length / outstandingLimit) || 1;
+  const totalOutstandingPages =
+    Math.ceil(filteredOutstanding.length / outstandingLimit) || 1;
   const displayedOutstanding = filteredOutstanding.slice(
     (outstandingPage - 1) * outstandingLimit,
     outstandingPage * outstandingLimit
   );
 
-  // ------------------------------------------------------------------
-  // --- New Logic for Right Side (Pupil Registration) ---
-
-  // Filtered Pupils List (Right Side)
+  // --- Filtered Pupils List (Right Side) ---
   const filteredPupilsList = useMemo(() => {
-    return selectedClass
+    let list = selectedClass
       ? allPupils.filter((s) => s.class === selectedClass)
       : allPupils;
-  }, [allPupils, selectedClass]);
 
-  // Gender Breakdown for Selected Class
+    if (searchTerm.trim() !== "") {
+      const term = searchTerm.toLowerCase();
+      list = list.filter(
+        (p) =>
+          (p.studentName &&
+            p.studentName.toLowerCase().includes(term)) ||
+          (p.firstName &&
+            `${p.firstName} ${p.lastName}`.toLowerCase().includes(term)) ||
+          (p.studentID && p.studentID.toLowerCase().includes(term))
+      );
+    }
+
+    return list;
+  }, [allPupils, selectedClass, searchTerm]);
+
+  // --- Gender Breakdown ---
   const genderBreakdown = useMemo(() => {
-    const male = filteredPupilsList.filter(p => p.gender && p.gender.toLowerCase() === 'male').length;
-    const female = filteredPupilsList.filter(p => p.gender && p.gender.toLowerCase() === 'female').length;
+    const male = filteredPupilsList.filter(
+      (p) => p.gender && p.gender.toLowerCase() === "male"
+    ).length;
+    const female = filteredPupilsList.filter(
+      (p) => p.gender && p.gender.toLowerCase() === "female"
+    ).length;
     return { male, female, total: filteredPupilsList.length };
   }, [filteredPupilsList]);
 
-  // Pagination for Pupils List
-  const totalPupilsPages = Math.ceil(filteredPupilsList.length / pupilsListLimit) || 1;
+  // --- Pagination for Pupils List ---
+  const totalPupilsPages =
+    Math.ceil(filteredPupilsList.length / pupilsListLimit) || 1;
   const displayedPupils = filteredPupilsList.slice(
     (pupilsPage - 1) * pupilsListLimit,
     pupilsPage * pupilsListLimit
   );
 
-  // ------------------------------------------------------------------
-
+  // --- Reset page when search/class changes ---
+  useEffect(() => {
+    setPupilsPage(1);
+  }, [searchTerm, selectedClass]);
 
   return (
     <div className="flex flex-col md:flex-row w-full h-screen">
-      {/* LEFT SIDE: Fees Outstanding & Pupils Per Class */}
+      {/* LEFT SIDE */}
       <div className="hidden md:flex md:w-[70%] flex-col p-4 space-y-4">
-        {/* Pupils per class chart */}
+        {/* Pupils Per Class Chart */}
         <div className="flex-1 bg-red-300 p-4 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-xl font-bold">Pupils Per Class</h1>
@@ -215,14 +223,16 @@ export default function RegDashboard() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-gray-700">No pupil data for {academicYear}.</p>
+            <p className="text-gray-700">
+              No pupil data for {academicYear}.
+            </p>
           )}
         </div>
 
         {/* Fees Outstanding Table */}
         <div className="flex-1 bg-yellow-300 p-4 rounded-lg shadow-md flex flex-col">
           <div className="flex justify-between items-center mb-2">
-            <h1 className="text-xl font-bold">Fees Outstanding (Retained)</h1>
+            <h1 className="text-xl font-bold">Fees Outstanding</h1>
             <select
               value={outstandingLimit}
               onChange={(e) => {
@@ -231,10 +241,11 @@ export default function RegDashboard() {
               }}
               className="p-1 border rounded bg-white"
             >
-              <option value={5}>5</option>
-              <option value={7}>7</option>
-              <option value={10}>10</option>
-              <option value={15}>15</option>
+              {[5, 7, 10, 15].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -256,7 +267,9 @@ export default function RegDashboard() {
                     <td className="border p-2">{s.class}</td>
                     <td className="border p-2">{s.totalFee}</td>
                     <td className="border p-2">{s.totalPaid}</td>
-                    <td className="border p-2 text-red-600">{s.outstanding}</td>
+                    <td className="border p-2 text-red-600">
+                      {s.outstanding}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -276,7 +289,11 @@ export default function RegDashboard() {
               Page {outstandingPage} of {totalOutstandingPages}
             </span>
             <button
-              onClick={() => setOutstandingPage((p) => Math.min(p + 1, totalOutstandingPages))}
+              onClick={() =>
+                setOutstandingPage((p) =>
+                  Math.min(p + 1, totalOutstandingPages)
+                )
+              }
               disabled={outstandingPage === totalOutstandingPages}
               className="px-3 py-1 bg-white rounded shadow disabled:opacity-50"
             >
@@ -286,17 +303,14 @@ export default function RegDashboard() {
         </div>
       </div>
 
-      {/* RIGHT SIDE: Pupil Registration List & Gender Breakdown (Refactored) */}
-      <div className="md:w-[30%] bg-blue-300 flex flex-col border-lw-full md:w-[30%] bg-blue-300 flex flex-col border-l">
-        {/* Header & Class Selector */}
+      {/* RIGHT SIDE: Pupil Registration */}
+      <div className="md:w-[30%] bg-blue-300 flex flex-col border-l">
+        {/* Header */}
         <div className="p-4 border-b border-blue-400 sticky top-0 bg-blue-300 z-10 flex justify-between items-center">
           <h1 className="text-xl font-bold">Pupil Registration List</h1>
           <select
             value={selectedClass}
-            onChange={(e) => {
-              setSelectedClass(e.target.value);
-              setPupilsPage(1); // Reset pagination on class change
-            }}
+            onChange={(e) => setSelectedClass(e.target.value)}
             className="p-1 border rounded bg-white text-black"
           >
             <option value="">All Classes</option>
@@ -308,15 +322,32 @@ export default function RegDashboard() {
           </select>
         </div>
 
-        {/* Gender Breakdown Summary */}
-        <div className="p-2 border-b border-blue-400 bg-blue-100 sticky top-[64px] z-10 flex justify-between text-sm font-semibold">
-          <p>Total Pupils: <span className="text-blue-700">{genderBreakdown.total}</span></p>
-          <p>Male: <span className="text-blue-700">{genderBreakdown.male}</span></p>
-          <p>Female: <span className="text-pink-700">{genderBreakdown.female}</span></p>
+        {/* Search Bar */}
+        <div className="p-2 bg-blue-200 sticky top-[60px] z-10 flex items-center gap-2">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by name or ID..."
+            className="flex-1 p-2 rounded border"
+          />
+        </div>
+
+        {/* Gender Summary */}
+        <div className="p-2 border-b border-blue-400 bg-blue-100 sticky top-[100px] z-10 flex justify-between text-sm font-semibold">
+          <p>
+            Total: <span className="text-blue-700">{genderBreakdown.total}</span>
+          </p>
+          <p>
+            Male: <span className="text-blue-700">{genderBreakdown.male}</span>
+          </p>
+          <p>
+            Female: <span className="text-pink-700">{genderBreakdown.female}</span>
+          </p>
         </div>
 
         {/* Limit Selector */}
-        <div className="p-2 bg-blue-200 sticky top-[100px] z-10 flex items-center gap-2">
+        <div className="p-2 bg-blue-200 sticky top-[135px] z-10 flex items-center gap-2">
           <label className="text-sm">Show:</label>
           <select
             value={pupilsListLimit}
@@ -326,14 +357,11 @@ export default function RegDashboard() {
             }}
             className="px-2 py-1 rounded border"
           >
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={15}>15</option>
-            <option value={20}>20</option>
-            <option value={30}>30</option>
-            <option value={40}>40</option>
-            <option value={50}>50</option>
-            <option value={60}>60</option>
+            {[5, 10, 15, 20, 30, 40, 50].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
           </select>
           <span className="text-sm">per page</span>
         </div>
@@ -353,14 +381,20 @@ export default function RegDashboard() {
                 displayedPupils.map((s) => (
                   <tr key={s.id || s.studentID} className="bg-white">
                     <td className="border p-2">{s.studentID}</td>
-                    <td className="border p-2">{s.studentName || `${s.firstName} ${s.lastName}`}</td>
+                    <td className="border p-2">
+                      {s.studentName ||
+                        `${s.firstName} ${s.lastName}`}
+                    </td>
                     <td className="border p-2">{s.class}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={3} className="border p-2 text-center text-gray-700">
-                    No pupils found {selectedClass ? `in ${selectedClass}` : ''}.
+                  <td
+                    colSpan={3}
+                    className="border p-2 text-center text-gray-700"
+                  >
+                    No pupils found.
                   </td>
                 </tr>
               )}
@@ -381,7 +415,9 @@ export default function RegDashboard() {
             Page {pupilsPage} of {totalPupilsPages}
           </span>
           <button
-            onClick={() => setPupilsPage((p) => Math.min(p + 1, totalPupilsPages))}
+            onClick={() =>
+              setPupilsPage((p) => Math.min(p + 1, totalPupilsPages))
+            }
             disabled={pupilsPage === totalPupilsPages || totalPupilsPages === 0}
             className="px-3 py-1 bg-white rounded shadow disabled:opacity-50"
           >
