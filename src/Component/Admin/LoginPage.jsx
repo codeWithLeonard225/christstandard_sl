@@ -3,12 +3,16 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../../firebase";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../Security/AuthContext";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
+
 
 const LoginPage = () => {
   const [userID, setUserID] = useState("");
   const [userName, setUserName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
 
   const navigate = useNavigate();
   const { setUser } = useAuth();
@@ -98,17 +102,25 @@ const LoginPage = () => {
       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
         <h1 className="text-2xl font-bold text-indigo-700 mb-6 text-center">Login</h1>
         <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-gray-700 font-semibold mb-1">ID</label>
-            <input
-              type="text"
-              value={userID}
-              onChange={(e) => setUserID(e.target.value)}
-              className="w-full border p-2 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-              required
-              disabled={loading}
-            />
-          </div>
+         <div className="relative">
+  <label className="block text-gray-700 font-semibold mb-1">ID</label>
+  <input
+    type={showPassword ? "text" : "password"}
+    value={userID}
+    onChange={(e) => setUserID(e.target.value)}
+    className="w-full border p-2 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"
+    required
+    disabled={loading}
+    placeholder="Enter your ID"
+  />
+  <span
+    className="absolute right-3 top-9 text-gray-500 cursor-pointer"
+    onClick={() => setShowPassword(!showPassword)}
+  >
+    {showPassword ? <FaEyeSlash /> : <FaEye />}
+  </span>
+</div>
+
           <div>
             <label className="block text-gray-700 font-semibold mb-1">Name</label>
             <input

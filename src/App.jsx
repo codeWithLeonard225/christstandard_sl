@@ -8,13 +8,24 @@ import TeacherGradesPage from "./Component/TeacherAssignment/TeacherPupilsPage";
 import PupilsDashboard from "./Component/PupilsPage/PupilsDashboard";
 import FeesPanel from "./Component/Admin/FeesPanel";
 import Testing from "./Component/Admin/Testing";
+import Home from "./Component/Web/Pages/Home";
+import About from "./Component/Web/Pages/About";
+import Programs from "./Component/Web/Pages/Programs";
+import Gallery from "./Component/Web/Pages/Gallery";
+import ContactUsPage from "./Component/Web/Pages/ContactUsPage";
 
 function App() {
   return (
     <AuthProvider>
       <Router>
+
         <Routes>
-          <Route path="/" element={<LoginPage />} />
+          <Route path="/" element={< Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/programs" element={<Programs />} />
+          <Route path="/gallery" element={<Gallery />} />
+           <Route path="/contact" element={<ContactUsPage />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route
             path="/PupilsDashboard"
             element={
