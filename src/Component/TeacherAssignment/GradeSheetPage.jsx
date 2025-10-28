@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { db } from "../../../firebase";
 import {
   collection,
@@ -6,202 +8,173 @@ import {
   query,
   where,
   getDocs,
-  orderBy,
 } from "firebase/firestore";
-// import { useAuth } from "../Security/AuthContext"; // Uncomment if needed
+import { useLocation } from "react-router-dom";
 
 const GradeSheetPage = () => {
-  // 1. STATE MANAGEMENT
+  const location = useLocation();
+  const schoolId = location.state?.schoolId || "N/A";
+
   const [academicYear, setAcademicYear] = useState("");
-  const [academicYears, setAcademicYears] = useState([]); // All available years
+  const [academicYears, setAcademicYears] = useState([]);
   const [selectedClass, setSelectedClass] = useState("");
-  const [selectedTest, setSelectedTest] = useState("Final Exam"); // Default to a more common final test
+  const [selectedTest, setSelectedTest] = useState("Term 1 T1");
   const [availableClasses, setAvailableClasses] = useState([]);
-  const [pupils, setPupils] = useState([]); // List of pupils for the selected class
-  const [gradesData, setGradesData] = useState([]); // Raw grades data from DB
+  const [pupils, setPupils] = useState([]);
+  const [gradesData, setGradesData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [classesCache, setClassesCache] = useState([]);
 
-  const tests = ["Test 1", "Test 2", "Test 3", "Final Exam"];
-  const MAX_SCORE_PER_SUBJECT = 100; // Standard assumption for percentage calculation
+  const tests = ["Term 1 T1", "Term 1 T2", "Term 2 T1", "Term 2 T2", "Term 3 T1", "Term 3 T2"];
+  const MAX_SCORE_PER_SUBJECT = 100;
 
-  // 2. DATA FETCHING HOOKS
-
-  // Fetch all years/classes and set defaults
+  // 🔹 Fetch Classes Cache (for subjectPercentage)
   useEffect(() => {
-    // Note: Fetching from PupilGrades ensures we only show options that actually have grades
-    const q = query(collection(db, "PupilGrades"), orderBy("academicYear", "desc"));
+    if (!schoolId) return;
+    const fetchClasses = async () => {
+      const snapshot = await getDocs(query(collection(db, "Classes"), where("schoolId", "==", schoolId)));
+      const data = snapshot.docs.map(doc => doc.data());
+      setClassesCache(data);
+    };
+    fetchClasses();
+  }, [schoolId]);
+
+  // 🔹 Fetch academic years and classes from grades
+  useEffect(() => {
+    if (!schoolId || schoolId === "N/A") return;
+
+    const q = query(collection(db, "PupilGrades"), where("schoolId", "==", schoolId));
     const unsub = onSnapshot(q, (snapshot) => {
       const years = [...new Set(snapshot.docs.map(doc => doc.data().academicYear).filter(Boolean))];
       const classes = [...new Set(snapshot.docs.map(doc => doc.data().className).filter(Boolean))];
-      
+
       setAcademicYears(years.sort().reverse());
       setAvailableClasses(classes.sort());
 
-      // Set initial state defaults ONLY if they haven't been set by the user
-      if (years.length > 0 && !academicYear) setAcademicYear(years[0]); 
-      if (classes.length > 0 && !selectedClass) setSelectedClass(classes[0]); 
-    });
-    return () => unsub();
-  }, []);
-
-  // Fetch pupils for the selected class/year (used for column headers)
-  useEffect(() => {
-    if (!selectedClass || !academicYear) {
-      setPupils([]);
-      return;
-    }
-    
-    const pupilsQuery = query(
-      collection(db, "PupilsReg"),
-      where("class", "==", selectedClass),
-      where("academicYear", "==", academicYear),
-      orderBy("studentName", "asc") 
-    );
-
-    const unsub = onSnapshot(pupilsQuery, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data(), studentID: doc.data().studentID }));
-      setPupils(data);
+      if (years.length > 0 && !academicYear) setAcademicYear(years[0]);
+      if (classes.length > 0 && !selectedClass) setSelectedClass(classes[0]);
     });
 
     return () => unsub();
-  }, [selectedClass, academicYear]);
+  }, [schoolId]);
 
-  // Fetch grades based on all three filters
+  // 🔹 Fetch pupils
+ // 🔹 Fetch pupils
+useEffect(() => {
+  if (!selectedClass || !academicYear || !schoolId) return;
+
+  const pupilsQuery = query(
+    collection(db, "PupilsReg"),
+    where("schoolId", "==", schoolId),
+    where("class", "==", selectedClass),
+    where("academicYear", "==", academicYear)
+  );
+
+  const unsub = onSnapshot(pupilsQuery, (snapshot) => {
+    const data = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data(), studentID: doc.data().studentID }))
+      .sort((a, b) => a.studentName.localeCompare(b.studentName)); // 🔹 Sort alphabetically
+    setPupils(data);
+  });
+
+  return () => unsub();
+}, [selectedClass, academicYear, schoolId]);
+
+
+  // 🔹 Fetch grades
   useEffect(() => {
-    if (!selectedClass || !selectedTest || !academicYear) {
-      setGradesData([]);
-      return;
-    }
+    if (!selectedClass || !selectedTest || !academicYear || !schoolId) return;
 
     setLoading(true);
-    
     const gradesQuery = query(
       collection(db, "PupilGrades"),
+      where("schoolId", "==", schoolId),
       where("academicYear", "==", academicYear),
       where("className", "==", selectedClass),
       where("test", "==", selectedTest)
     );
 
     const fetchGrades = async () => {
-        try {
-            const snapshot = await getDocs(gradesQuery);
-            const data = snapshot.docs.map((doc) => doc.data());
-            setGradesData(data);
-        } catch (error) {
-            console.error("Error fetching grades:", error);
-            setGradesData([]);
-        } finally {
-            setLoading(false);
-        }
+      const snapshot = await getDocs(gradesQuery);
+      const data = snapshot.docs.map(doc => doc.data());
+      setGradesData(data);
+      setLoading(false);
     };
 
     fetchGrades();
+  }, [selectedClass, selectedTest, academicYear, schoolId]);
 
-  }, [selectedClass, selectedTest, academicYear]);
+  // 🔹 Calculate subjects, grades, totals, percentages, and ranks
+  const { subjects, pupilGradesMap, pupilTotals } = React.useMemo(() => {
+    if (!gradesData.length || !pupils.length) return { subjects: [], pupilGradesMap: {}, pupilTotals: {} };
 
-
-  // 3. DATA TRANSFORMATION (Pivot table logic, Total Sum, and Percentage calculation)
-
-const { subjects, pupilGradesMap, pupilTotals } = React.useMemo(() => {
-    // 1. Get a unique list of all subjects (same as before)
-    const uniqueSubjects = [
-      ...new Set(gradesData.map((grade) => grade.subject)),
-    ].sort();
-
-    // 2. Map grades for easy lookup (same as before)
-    const gradesMap = uniqueSubjects.reduce((acc, subject) => {
-      acc[subject] = {};
-      return acc;
-    }, {});
-
-    gradesData.forEach((grade) => {
-      if (gradesMap[grade.subject]) {
-        gradesMap[grade.subject][grade.pupilID] = grade.grade;
-      }
+    const uniqueSubjects = [...new Set(gradesData.map(g => g.subject))].sort();
+    const gradesMap = uniqueSubjects.reduce((acc, sub) => { acc[sub] = {}; return acc; }, {});
+    gradesData.forEach(g => {
+      if (gradesMap[g.subject]) gradesMap[g.subject][g.pupilID] = g.grade;
     });
 
-    // 3. Calculate Total Sum and Percentage for each pupil
-    const pupilPerformance = []; // Use an array for easier sorting later
+    // Get subjectPercentage for selected class
+    const classInfo = classesCache.find(c => c.schoolId === schoolId && c.className === selectedClass);
+    const totalSubjectPercentage = classInfo?.subjectPercentage || (uniqueSubjects.length * MAX_SCORE_PER_SUBJECT);
 
-    pupils.forEach((pupil) => {
-        let totalScore = 0;
-        let subjectsAttempted = 0;
-
-        uniqueSubjects.forEach((subject) => {
-            const grade = gradesMap[subject]?.[pupil.studentID];
-            if (grade !== undefined && grade !== null) {
-                totalScore += grade;
-                subjectsAttempted += 1;
-            }
-        });
-
-        let percentage = 0;
-        if (subjectsAttempted > 0) {
-            const maxScoreForAttempted = subjectsAttempted * MAX_SCORE_PER_SUBJECT;
-            percentage = (totalScore / maxScoreForAttempted) * 100;
-        }
-
-        pupilPerformance.push({
-            studentID: pupil.studentID,
-            totalSum: totalScore,
-            percentage: parseFloat(percentage.toFixed(2)),
-            // Rank will be calculated next
-            rank: null
-        });
-    });
-    
-    // 4. Calculate Rank (Standard Competition Ranking)
-    
-    // Sort the performance data by percentage descending
-    pupilPerformance.sort((a, b) => b.percentage - a.percentage);
-
-    const rankedTotalsMap = {};
-    let currentRank = 1;
-    let previousPercentage = -1;
-    let rankCount = 0;
-
-    // Assign ranks (1, 2, 2, 4...)
-    pupilPerformance.forEach((item, index) => {
-        rankCount++;
-        
-        if (item.percentage < previousPercentage) {
-            currentRank = rankCount;
-        } 
-        // If percentages are the same, they share the rank (currentRank)
-        else if (index === 0) { 
-             currentRank = 1;
-        }
-
-
-        // Handle pupils who may have no grades (0% score) by not ranking them
-        if (item.percentage === 0 && item.totalSum === 0) {
-            item.rank = "N/A";
-        } else {
-            item.rank = currentRank;
-        }
-
-        previousPercentage = item.percentage;
-        
-        // Final map for easy lookup by studentID in the render function
-        rankedTotalsMap[item.studentID] = {
-            totalSum: item.totalSum,
-            percentage: item.percentage,
-            rank: item.rank
-        };
+    const totalsMap = {};
+    const perf = pupils.map(pupil => {
+      let total = 0;
+      uniqueSubjects.forEach(sub => {
+        const grade = gradesMap[sub]?.[pupil.studentID];
+        if (grade != null) total += grade;
+      });
+      const percentage = totalSubjectPercentage > 0 ? (total / totalSubjectPercentage) * 100 : 0;
+      return { studentID: pupil.studentID, total, percentage };
     });
 
-    return { subjects: uniqueSubjects, pupilGradesMap: gradesMap, pupilTotals: rankedTotalsMap };
-}, [gradesData, pupils]);
+    perf.sort((a, b) => b.percentage - a.percentage);
+    let rank = 1;
+    perf.forEach((p, i) => {
+      if (i > 0 && p.percentage < perf[i - 1].percentage) rank = i + 1;
+      totalsMap[p.studentID] = { totalSum: p.total, percentage: p.percentage.toFixed(1), rank: p.total === 0 ? "N/A" : rank };
+    });
 
+    return { subjects: uniqueSubjects, pupilGradesMap: gradesMap, pupilTotals: totalsMap };
+  }, [gradesData, pupils, selectedClass, schoolId, classesCache]);
 
-  // 4. RENDER LOGIC
-
-  // Helper to color the grade
+  // 🔹 Helper for grade colors
   const getGradeColor = (grade) => {
-    if (grade === undefined) return "text-gray-400";
-    if (grade >= 70) return "text-green-600 font-bold";
-    if (grade >= 40) return "text-yellow-600 font-medium";
+    if (grade == null) return "text-gray-400";
+    if (grade >= 50) return "text-blue-600 font-bold";
     return "text-red-600 font-bold";
+  };
+
+  // 🔹 Print Preview
+  const handlePrint = () => window.print();
+
+  // 🔹 Download PDF
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF({ orientation: "landscape" });
+    doc.setFontSize(14);
+    doc.text(`Grade Sheet - ${selectedClass} (${academicYear}) - ${selectedTest}`, 14, 15);
+
+    const tableHeaders = ["Subject", ...pupils.map(p => p.studentName)];
+    const tableRows = subjects.map(sub => [
+      sub,
+      ...pupils.map(p => pupilGradesMap[sub]?.[p.studentID] ?? "—")
+    ]);
+
+    tableRows.push(["Total Sum", ...pupils.map(p => pupilTotals[p.studentID]?.totalSum ?? "—")]);
+    tableRows.push(["Percentage (%)", ...pupils.map(p => pupilTotals[p.studentID]?.percentage ?? "—")]);
+    tableRows.push(["Rank", ...pupils.map(p => pupilTotals[p.studentID]?.rank ?? "—")]);
+
+    autoTable(doc, {
+      head: [tableHeaders],
+      body: tableRows,
+      startY: 25,
+      theme: "grid",
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [63, 81, 181] },
+    });
+
+    doc.save(`GradeSheet_${selectedClass}_${selectedTest}.pdf`);
   };
 
   return (
@@ -210,20 +183,32 @@ const { subjects, pupilGradesMap, pupilTotals } = React.useMemo(() => {
         Pupil Grade Sheet Report
       </h2>
 
-      {/* Filter Selectors */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 p-4 border rounded-lg bg-indigo-50">
-        
+      {/* Buttons
+      <div className="flex justify-center gap-4 mb-6 no-print">
+        <button
+          onClick={handlePrint}
+          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold shadow"
+        >
+          🖨️ Print Preview
+        </button>
+        <button
+          onClick={handleDownloadPDF}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold shadow"
+        >
+          📄 Download PDF
+        </button>
+      </div> */}
+
+      {/* Filter Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 p-4 border rounded-lg bg-indigo-50 no-print">
         <div>
           <label className="font-semibold text-gray-700 block mb-1">Academic Year:</label>
           <select
             value={academicYear}
             onChange={(e) => setAcademicYear(e.target.value)}
             className="w-full border rounded-lg px-3 py-2 bg-white"
-            disabled={academicYears.length === 0}
           >
-            {academicYears.map((year, i) => (
-              <option key={i} value={year}>{year}</option>
-            ))}
+            {academicYears.map((year, i) => <option key={i} value={year}>{year}</option>)}
           </select>
         </div>
 
@@ -233,11 +218,8 @@ const { subjects, pupilGradesMap, pupilTotals } = React.useMemo(() => {
             value={selectedClass}
             onChange={(e) => setSelectedClass(e.target.value)}
             className="w-full border rounded-lg px-3 py-2 bg-white"
-            disabled={availableClasses.length === 0}
           >
-            {availableClasses.map((className, i) => (
-              <option key={i} value={className}>{className}</option>
-            ))}
+            {availableClasses.map((c, i) => <option key={i} value={c}>{c}</option>)}
           </select>
         </div>
 
@@ -248,143 +230,51 @@ const { subjects, pupilGradesMap, pupilTotals } = React.useMemo(() => {
             onChange={(e) => setSelectedTest(e.target.value)}
             className="w-full border rounded-lg px-3 py-2 bg-white"
           >
-            {tests.map((test, i) => (
-              <option key={i} value={test}>{test}</option>
-            ))}
+            {tests.map((t, i) => <option key={i} value={t}>{t}</option>)}
           </select>
         </div>
       </div>
 
-      <div className="text-center mb-6">
-        <h3 className="text-xl font-medium text-gray-800">
-          Grade Summary for **{selectedTest}** in **{selectedClass}**
-        </h3>
-      </div>
-      
-      {loading && (
-        <div className="text-center p-8 text-indigo-600 font-medium">
-          Loading grades, please wait...
-        </div>
-      )}
-
-      {/* Grade Table Container */}
-      {!loading && subjects.length > 0 && (
-        // Added max-h-[80vh] and overflow-y-auto for vertical scrolling
-        <div className="overflow-x-auto border rounded-lg shadow-lg max-h-[80vh] overflow-y-auto">
+      {loading ? (
+        <div className="text-center text-indigo-600 p-6">Loading grades...</div>
+      ) : subjects.length > 0 ? (
+        <div className="overflow-x-auto border rounded-lg shadow-lg">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-indigo-600 text-white sticky top-0">
               <tr>
-                {/* 1. Fixed Subject Column Header */}
-                <th 
-                  className="px-4 py-3 text-left text-sm font-medium border-r border-indigo-700 sticky left-0 bg-indigo-600 z-30 w-48 whitespace-nowrap"
-                >
-                  Subject
-                </th>
-                
-                {/* 2. Pupil Names (Rotated Column Headers) */}
-                {pupils.map((pupil) => (
-                  <th
-                    key={pupil.studentID}
-                    className="th-rotate" 
-                    style={{ width: '50px' }}
-                  >
-                    <div>
-                      {pupil.studentName}
-                    </div>
-                  </th>
-                ))}
+                <th className="px-4 py-3 text-left border-r">Subject</th>
+                {pupils.map((p) => <th key={p.studentID} className="px-4 py-3 text-center">{p.studentName}</th>)}
               </tr>
             </thead>
-            
-            <tbody className="bg-white divide-y divide-gray-200">
-              {/* Subject Grade Rows */}
-              {subjects.map((subject, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  
-                  {/* Subject Name (Sticky Row Header) */}
-                  <td 
-                    className="px-4 py-3 font-semibold text-gray-900 border-r border-gray-300 sticky left-0 bg-white z-10 w-48 whitespace-nowrap"
-                  >
-                    {subject}
-                  </td>
-                  
-                  {/* Grades for each pupil */}
-                  {pupils.map((pupil) => {
-                    const grade = pupilGradesMap[subject]?.[pupil.studentID];
-                    return (
-                      <td
-                        key={pupil.studentID}
-                        className="px-4 py-3 text-center text-sm border-l border-gray-200 grade-cell" 
-                      >
-                        <span className={getGradeColor(grade)}>
-                          {grade !== undefined ? grade : "—"}
-                        </span>
-                      </td>
-                    );
-                  })}
+            <tbody>
+              {subjects.map((sub, i) => (
+                <tr key={i} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-semibold border-r">{sub}</td>
+                  {pupils.map((p) => (
+                    <td key={p.studentID} className={`px-4 py-3 text-center ${getGradeColor(pupilGradesMap[sub]?.[p.studentID])}`}>
+                      {pupilGradesMap[sub]?.[p.studentID] ?? "—"}
+                    </td>
+                  ))}
                 </tr>
               ))}
-              
-              {/* Total Sum Row */}
-              <tr className="bg-gray-100 font-bold border-t-2 border-indigo-300">
-                <td 
-                  className="px-4 py-3 text-gray-900 sticky left-0 bg-gray-100 z-50 w-48 whitespace-nowrap"
-                >
-                  Total Sum
-                </td>
-                {pupils.map((pupil) => (
-                  <td 
-                    key={`sum-${pupil.studentID}`} 
-                    className="px-4 py-3 text-center text-sm border-l border-gray-200 grade-cell"
-                  >
-                    {pupilTotals[pupil.studentID]?.totalSum || "—"}
-                  </td>
-                ))}
+              <tr className="bg-gray-100 font-bold">
+                <td className="px-4 py-3 border-r">Total Sum</td>
+                {pupils.map((p) => <td key={p.studentID} className="px-4 py-3 text-center">{pupilTotals[p.studentID]?.totalSum ?? "—"}</td>)}
               </tr>
-
-              {/* Percentage Row */}
               <tr className="bg-indigo-50 font-bold">
-                <td 
-                  className="px-4 py-3 text-indigo-700 sticky left-0 bg-indigo-50 z-50 w-48 whitespace-nowrap"
-                >
-                  Percentage (%)
-                </td>
-                {pupils.map((pupil) => (
-                  <td 
-                    key={`percent-${pupil.studentID}`} 
-                    className="px-4 py-3 text-center text-sm border-l border-gray-200 grade-cell"
-                  >
-                    {pupilTotals[pupil.studentID]?.percentage !== undefined 
-                      ? `${pupilTotals[pupil.studentID].percentage}%` 
-                      : "—"}
-                  </td>
-                ))}
+                <td className="px-4 py-3 border-r">Percentage (%)</td>
+                {pupils.map((p) => <td key={p.studentID} className="px-4 py-3 text-center">{pupilTotals[p.studentID]?.percentage ?? "—"}%</td>)}
               </tr>
-              {/* NEW: Rank Row */}
-                        <tr className="bg-indigo-100 font-extrabold border-t border-indigo-300">
-                            <td 
-                                className="px-4 py-3 text-indigo-800 sticky left-0 bg-indigo-100 z-50 w-48 whitespace-nowrap"
-                            >
-                                Class Rank
-                            </td>
-                            {pupils.map((pupil) => (
-                                <td 
-                                    key={`rank-${pupil.studentID}`} 
-                                    className="px-4 py-3 text-center text-sm border-l border-gray-200 grade-cell"
-                                >
-                                    {pupilTotals[pupil.studentID]?.rank || "—"}
-                                </td>
-                            ))}
-                        </tr>
+              <tr className="bg-indigo-100 font-bold">
+                <td className="px-4 py-3 border-r">Rank</td>
+                {pupils.map((p) => <td key={p.studentID} className="px-4 py-3 text-center">{pupilTotals[p.studentID]?.rank ?? "—"}</td>)}
+              </tr>
             </tbody>
           </table>
         </div>
-      )}
-
-      {/* No Data Message */}
-      {!loading && subjects.length === 0 && (
-        <div className="text-center p-8 bg-yellow-50 text-yellow-800 border border-yellow-300 rounded-lg">
-          No grades found for the selected combination.
+      ) : (
+        <div className="text-center text-yellow-700 p-6 bg-yellow-50 border rounded">
+          No grades found for this selection.
         </div>
       )}
     </div>
