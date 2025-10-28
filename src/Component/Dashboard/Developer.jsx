@@ -19,7 +19,7 @@ import {
   MdRemoveCircle,
 } from "react-icons/md";
 import Registration from "../Voters/Registration";
-import ClassRegistration from "./ClassRegistration";
+import ClassRegistration from "../Admin/ClassRegistration";
 import FeeReceipt from "../FeeReceipt.jsx/FeeReceipt";
 import FeesCostPage from "../FeeReceipt.jsx/FeesCostPage";
 import FeesDashboard from "../Dashboard/FeesDsahboard";
@@ -27,12 +27,17 @@ import SubjectPage from "../SubjectPage/SubjectPage";
 import TeacherAssignmentPage from "../TeacherAssignment/TeacherAssignmentPage";
 import TeacherRegistration from "../Voters/TeacherRegistration";
 import TeacherPupilsPage from "../TeacherAssignment/TeacherPupilsPage";
-import SubGradeMatrixPage from "../TeacherAssignment/SubGradeMatrixPage";
-import ClassFullTermMatrixPage from "../TeacherAssignment/ClassFullTermMatrixPage";
 import GradeSheetPage from "../TeacherAssignment/GradeSheetPage";
 import GeneralReportCard from "../PupilsPage/GeneralReportCard";
-import Dashboard from "../Dashboard/Dashboard"
+import SubGradeMatrixPage from "../TeacherAssignment/SubGradeMatrixPage";
+import ClassFullTermMatrixPage from "../TeacherAssignment/ClassFullTermMatrixPage";
+import SchoolRegistration from "../CeoPanel/SchoolRegistration"
+import AdminForm from "../CeoPanel/AdminForm"
+import UpdateNamesToUppercase from "../CeoPanel/UpdateNamesToUppercase"
 import RegDashboard from "../Dashboard/RegDashboard"
+import SubjectData from "../CeoPanel/SubjectData";
+import BulkUpdatePupilType from "../CeoPanel/BulkUpdatePupilType";
+import UpdateClassWithSchoolId from "../CeoPanel/UpdateClassWithSchoolId";
 
 
 // --- Navigation Items ---
@@ -55,7 +60,7 @@ const NAV_ITEMS = [
       { key: "feesCost", label: " feesUpdate", icon: <MdPerson /> },
     ],
   },
- {
+  {
     key: "Staff",
     label: "staff",
     icon: <MdBarChart />,
@@ -80,6 +85,20 @@ const NAV_ITEMS = [
 
     ],
   },
+  {
+    key: "ceo",
+    label: "CEO",
+    icon: <MdBarChart />,
+    children: [
+      { key: "SchoolRegistration", label: "School Regis", icon: <MdPerson /> },
+      { key: "subjects", label: "Subjects", icon: <MdPerson /> },
+      { key: "SubjectData", label: "SubjectData", icon: <MdPerson /> },
+      { key: "SchoolAdminReg", label: "School Admin Reg", icon: <MdPerson /> },
+      { key: "UpdateNamesToUppercase", label: "UpperCaseName", icon: <MdPerson /> },
+      { key: "BulkUpdatePupilType", label: "BulkUpdatePupilType", icon: <MdPerson /> },
+      { key: "UpdateClassWithSchoolId", label: "UpdateClassWithSchoolId", icon: <MdPerson /> },
+    ],
+  },
 ];
 
 // --- Button component ---
@@ -102,7 +121,7 @@ const Button = ({ variant = "default", onClick, className = "", children }) => {
 
 
 // --- Main Admin Panel ---
-function AdminPanel() {
+function Developer() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [openDropdown, setOpenDropdown] = useState(null);
   const [openNestedDropdowns, setOpenNestedDropdowns] = useState({});
@@ -142,7 +161,7 @@ function AdminPanel() {
       </div>
     ));
 
-   const renderContent = () => {
+  const renderContent = () => {
     switch (activeTab) {
       case "dashboard": return <RegDashboard />;
       case "Form": return <Registration />;
@@ -151,12 +170,21 @@ function AdminPanel() {
       case "feesCost": return <FeesCostPage />;
       case "TeacherRegistration": return <TeacherRegistration />;
       case "subjects": return <SubjectPage />;
+      case "SubjectData": return <SubjectData />;
       case "TeacherAssignment": return <TeacherAssignmentPage />;
       case "TeacherPupilsPage": return <TeacherPupilsPage />;
-         case "SubGradeMatrixPage": return <SubGradeMatrixPage />;
-      case "ClassFullTermMatrixPage": return <ClassFullTermMatrixPage />;
       case "GradeSheetPage": return <GradeSheetPage />;
       case "GeneralReportCard": return <GeneralReportCard />;
+      case "SubGradeMatrixPage": return <SubGradeMatrixPage />;
+      case "ClassFullTermMatrixPage": return <ClassFullTermMatrixPage />;
+      case "SchoolRegistration": return <SchoolRegistration />;
+      case "SchoolAdminReg": return <AdminForm />;
+      case "UpdateNamesToUppercase": return <UpdateNamesToUppercase />;
+      case "BulkUpdatePupilType": return <BulkUpdatePupilType />;
+      case "UpdateClassWithSchoolId": return <UpdateClassWithSchoolId />;
+  
+
+      case "schoolreg": return <SchoolRegistration />;
 
       default: return <Placeholder title={activeTab} />;
     }
@@ -205,4 +233,4 @@ function AdminPanel() {
   );
 }
 
-export default AdminPanel;
+export default Developer;

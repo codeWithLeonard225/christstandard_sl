@@ -13,6 +13,8 @@ import About from "./Component/Web/Pages/About";
 import Programs from "./Component/Web/Pages/Programs";
 import Gallery from "./Component/Web/Pages/Gallery";
 import ContactUsPage from "./Component/Web/Pages/ContactUsPage";
+import Developer from "./Component/Dashboard/Developer";
+import PupilUpdate from "./Component/TeacherAssignment/PupilUpdate";
 
 function App() {
   return (
@@ -43,7 +45,31 @@ function App() {
             }
           />
           <Route
-            path="/teacher"
+            path="/special"
+            element={
+              <ProtectedRoute role="admin">
+                <Developer />
+              </ProtectedRoute>
+            }
+          />
+            <Route
+            path="/registra"
+            element={
+              <ProtectedRoute role="admin">
+                <FeesPanel />
+              </ProtectedRoute>
+            }
+          />
+            <Route
+            path="/class"
+            element={
+              <ProtectedRoute role="teacher">
+                <PupilUpdate/>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subjectTeacher"
             element={
               <ProtectedRoute role="teacher">
                 <TeacherGradesPage />
@@ -54,13 +80,14 @@ function App() {
             path="/ceo"
             element={
               <ProtectedRoute role="ceo">
-                <FeesPanel />
+                <Developer />
               </ProtectedRoute>
             }
           />
         </Routes>
       </Router>
     </AuthProvider>
+    
   );
 }
 

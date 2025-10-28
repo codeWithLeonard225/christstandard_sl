@@ -5,16 +5,20 @@ import { useLocation } from "react-router-dom";
 
 const IndividualReportCardTerm2 = () => {
   const location = useLocation();
-  const pupilData = location.state?.pupil || {};
+  const pupilData = location.state?.user || {};
+  const schoolId = location.state?.schoolId || "N/A";
+  const schoolName = location.state?.schoolName || "Unknown School"; // Correctly receives schoolName
+
+
 
   // Individual pupil's grades
-  const [pupilGradesData, setPupilGradesData] = useState([]); 
+  const [pupilGradesData, setPupilGradesData] = useState([]);
   // All grades for the current class/year (used for ranking)
-  const [classGradesData, setClassGradesData] = useState([]); 
+  const [classGradesData, setClassGradesData] = useState([]);
   const [latestInfo, setLatestInfo] = useState({ class: "", academicYear: "" });
   const [loading, setLoading] = useState(true);
 
-  const tests = ["Test 3", "Test 4"];
+  const tests = ["Term 2 T1", "Term 2 T2"];
 
   // ✅ Step 1: Fetch latest class & academic year for the pupil
   useEffect(() => {
@@ -23,7 +27,7 @@ const IndividualReportCardTerm2 = () => {
     const pupilRegRef = query(
       collection(db, "PupilsReg"),
       where("studentID", "==", pupilData.studentID),
-     
+      where("schoolId", "==", schoolId),
     );
 
     const unsubscribe = onSnapshot(pupilRegRef, (snapshot) => {
@@ -35,7 +39,7 @@ const IndividualReportCardTerm2 = () => {
         });
       }
     }, (error) => {
-        console.error("Firestore Error in PupilsReg lookup:", error);
+      console.error("Firestore Error in PupilsReg lookup:", error);
     });
 
     return () => unsubscribe();
@@ -49,7 +53,8 @@ const IndividualReportCardTerm2 = () => {
       collection(db, "PupilGrades"),
       where("academicYear", "==", latestInfo.academicYear),
       where("className", "==", latestInfo.class),
-      where("pupilID", "==", pupilData.studentID)
+      where("pupilID", "==", pupilData.studentID),
+      where("schoolId", "==", schoolId),
     );
 
     const unsubscribe = onSnapshot(pupilGradesRef, (snapshot) => {
@@ -66,12 +71,13 @@ const IndividualReportCardTerm2 = () => {
     const classGradesRef = query(
       collection(db, "PupilGrades"),
       where("academicYear", "==", latestInfo.academicYear),
-      where("className", "==", latestInfo.class)
+      where("className", "==", latestInfo.class),
+      where("schoolId", "==", schoolId),
     );
 
     const unsubscribe = onSnapshot(classGradesRef, (snapshot) => {
       setClassGradesData(snapshot.docs.map((doc) => doc.data()));
-      setLoading(false); 
+      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -95,19 +101,19 @@ const IndividualReportCardTerm2 = () => {
         const studentSubjectGrades = classGradesData.filter(
           (g) => g.pupilID === id && g.subject === subject
         );
-        const t1 = studentSubjectGrades.find(g => g.test === "Test 3")?.grade || 0;
-        const t2 = studentSubjectGrades.find(g => g.test === "Test 4")?.grade || 0;
+        const t1 = studentSubjectGrades.find(g => g.test === "Term 2 T1")?.grade || 0;
+        const t2 = studentSubjectGrades.find(g => g.test === "Term 2 T2")?.grade || 0;
         const mean = (Number(t1) + Number(t2)) / 2;
         subjectScores.push({ id, mean });
       }
 
       subjectScores.sort((a, b) => b.mean - a.mean);
-      
+
       for (let i = 0; i < subjectScores.length; i++) {
         if (i > 0 && subjectScores[i].mean === subjectScores[i - 1].mean) {
-            subjectScores[i].rank = subjectScores[i - 1].rank;
+          subjectScores[i].rank = subjectScores[i - 1].rank;
         } else {
-            subjectScores[i].rank = i + 1;
+          subjectScores[i].rank = i + 1;
         }
       }
       classMeansBySubject[subject] = subjectScores;
@@ -120,25 +126,25 @@ const IndividualReportCardTerm2 = () => {
     let finalTotalMeanSum = 0; // Sum of unrounded means for accurate total calculation
 
     const subjectData = uniqueSubjects.map((subject) => {
-      const t1 = pupilGradesData.find((g) => g.subject === subject && g.test === "Test 3")?.grade || 0;
-      const t2 = pupilGradesData.find((g) => g.subject === subject && g.test === "Test 4")?.grade || 0;
+      const t1 = pupilGradesData.find((g) => g.subject === subject && g.test === "Term 2 T1")?.grade || 0;
+      const t2 = pupilGradesData.find((g) => g.subject === subject && g.test === "Term 2 T2")?.grade || 0;
       const rawMean = (Number(t1) + Number(t2)) / 2;
-      
+
       // ✅ Subject Mean: 0 decimal place (rounded to nearest whole number)
       const displayMean = Math.round(rawMean);
-      
+
       finalTotalMeanSum += rawMean; // Use raw mean for accurate overall calculation
 
       const rankEntry = classMeansBySubject[subject]?.find(item => item.id === pupilData.studentID);
       const rank = rankEntry ? rankEntry.rank : "—";
-      
-      return { 
-          subject, 
-          test1: Number(t1), 
-          test2: Number(t2), 
-          mean: displayMean, // Use rounded mean for display
-          rawMean: rawMean, // Keep raw mean for total calculation
-          rank 
+
+      return {
+        subject,
+        test1: Number(t1),
+        test2: Number(t2),
+        mean: displayMean, // Use rounded mean for display
+        rawMean: rawMean, // Keep raw mean for total calculation
+        rank
       };
     });
 
@@ -147,37 +153,37 @@ const IndividualReportCardTerm2 = () => {
     // ----------------------------------------------------
     const overallScores = [];
 
-    for (const id of pupilIDs) { 
-        const pupilGrades = classGradesData.filter(d => d.pupilID === id);
-        const subjectsInClass = [...new Set(pupilGrades.map(d => d.subject))];
-        let totalRawMeanSum = 0;
-        
-        for (const subject of subjectsInClass) {
-            const t1 = pupilGrades.find(g => g.subject === subject && g.test === "Test 3")?.grade || 0;
-            const t2 = pupilGrades.find(g => g.subject === subject && g.test === "Test 4")?.grade || 0;
-            totalRawMeanSum += (Number(t1) + Number(t2)) / 2;
-        }
+    for (const id of pupilIDs) {
+      const pupilGrades = classGradesData.filter(d => d.pupilID === id);
+      const subjectsInClass = [...new Set(pupilGrades.map(d => d.subject))];
+      let totalRawMeanSum = 0;
 
-        if (subjectsInClass.length > 0) {
-            overallScores.push({ id, totalRawMeanSum });
-        }
+      for (const subject of subjectsInClass) {
+        const t1 = pupilGrades.find(g => g.subject === subject && g.test === "Term 2 T1")?.grade || 0;
+        const t2 = pupilGrades.find(g => g.subject === subject && g.test === "Term 2 T2")?.grade || 0;
+        totalRawMeanSum += (Number(t1) + Number(t2)) / 2;
+      }
+
+      if (subjectsInClass.length > 0) {
+        overallScores.push({ id, totalRawMeanSum });
+      }
     }
 
     overallScores.sort((a, b) => b.totalRawMeanSum - a.totalRawMeanSum);
 
     let overallRank = "—";
     for (let i = 0; i < overallScores.length; i++) {
-        // Assign rank (handling ties)
-        if (i > 0 && overallScores[i].totalRawMeanSum === overallScores[i - 1].totalRawMeanSum) {
-            overallScores[i].rank = overallScores[i - 1].rank;
-        } else {
-            overallScores[i].rank = i + 1;
-        }
-        
-        if (overallScores[i].id === pupilData.studentID) {
-            overallRank = overallScores[i].rank;
-            break;
-        }
+      // Assign rank (handling ties)
+      if (i > 0 && overallScores[i].totalRawMeanSum === overallScores[i - 1].totalRawMeanSum) {
+        overallScores[i].rank = overallScores[i - 1].rank;
+      } else {
+        overallScores[i].rank = i + 1;
+      }
+
+      if (overallScores[i].id === pupilData.studentID) {
+        overallRank = overallScores[i].rank;
+        break;
+      }
     }
 
     // ----------------------------------------------------
@@ -187,9 +193,9 @@ const IndividualReportCardTerm2 = () => {
     const totalMarks = Math.round(finalTotalMeanSum);
 
     // Overall Percentage: Unrounded mean average, 1 decimal place
-    const overallPercentage = subjectData.length > 0 
-        ? (finalTotalMeanSum / subjectData.length).toFixed(1)
-        : 0;
+    const overallPercentage = subjectData.length > 0
+      ? (finalTotalMeanSum / subjectData.length).toFixed(1)
+      : 0;
 
     return { subjects: uniqueSubjects, reportRows: subjectData, totalMarks, overallPercentage, overallRank };
   }, [pupilGradesData, classGradesData, pupilData.studentID]);
@@ -206,7 +212,7 @@ const IndividualReportCardTerm2 = () => {
   return (
     <div className="max-w-5xl mx-auto p-6 bg-white shadow-xl rounded-2xl">
       <h2 className="text-2xl font-bold text-center text-indigo-700 mb-6">
-       Christ Standard Secondary School
+        {schoolName}
       </h2>
 
       {/* 🧑‍🎓 Pupil Info */}
@@ -216,7 +222,7 @@ const IndividualReportCardTerm2 = () => {
             src={pupilData.userPhotoUrl}
             alt="Pupil"
             className="w-24 h-24 object-cover rounded-full border-2 border-indigo-500"
-            onError={(e) => { e.target.onerror = null; e.target.src="https://via.placeholder.com/96" }}
+            onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/96" }}
           />
         ) : (
           <div className="w-24 h-24 bg-gray-300 rounded-full flex items-center justify-center text-gray-700 font-bold">
@@ -250,11 +256,12 @@ const IndividualReportCardTerm2 = () => {
             <thead className="bg-indigo-600 text-white">
               <tr>
                 <th className="px-4 py-2 text-left">Subject</th>
-                {tests.map((t, i) => (
-                  <th key={i} className="px-4 py-2">
-                    {t}
+                {tests.map((t) => (
+                  <th key={t} className="px-4 py-2">
+                    {t.split(" ").pop()} {/* Displays only T1 or T2 */}
                   </th>
                 ))}
+
                 <th className="px-4 py-2">Mn</th>
                 <th className="px-4 py-2">Rnk</th>
               </tr>
@@ -263,8 +270,8 @@ const IndividualReportCardTerm2 = () => {
               {/* Subject Rows */}
               {reportRows.map((row, idx) => (
                 <tr key={idx} className="border-b hover:bg-gray-50 transition-colors"><td className="text-left px-4 py-2 font-semibold">
-                    {row.subject}
-                  </td>
+                  {row.subject}
+                </td>
                   <td className={`px-4 py-2 ${getGradeColor(row.test1)}`}>
                     {row.test1}
                   </td>
@@ -280,9 +287,9 @@ const IndividualReportCardTerm2 = () => {
                   </td>
                 </tr>
               ))}
-              
+
               {/* NEW FOOTER ROWS */}
-              
+
               {/* 1. Combined Scores (Total Marks) */}
               <tr className="bg-indigo-100 font-bold text-indigo-800 border-t-2 border-indigo-600">
                 <td className="text-left px-4 py-2 text-base">Combined Scores</td>
@@ -298,7 +305,7 @@ const IndividualReportCardTerm2 = () => {
                 <td className="px-4 py-2 text-base">{overallPercentage}%</td>
                 <td className="px-4 py-2 text-sm text-gray-700">—</td>
               </tr>
-              
+
               {/* 3. Overall Position/Rank */}
               <tr className="bg-indigo-200 font-bold text-indigo-900 border-b-2 border-indigo-600">
                 <td className="text-left px-4 py-3 text-lg">Position</td>

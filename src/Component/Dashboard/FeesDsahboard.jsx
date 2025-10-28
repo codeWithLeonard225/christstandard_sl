@@ -11,6 +11,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { toast } from "react-toastify";
+import { useLocation } from "react-router-dom";
 
 export default function FeesDashboard() {
   const [pupilsData, setPupilsData] = useState([]); // For chart
@@ -20,6 +21,9 @@ export default function FeesDashboard() {
   const [feesCost, setFeesCost] = useState([]);
   const [allPupils, setAllPupils] = useState([]);
   const [selectedClass, setSelectedClass] = useState("");
+
+    const location = useLocation();
+  const schoolId = location.state?.schoolId || "N/A";
 
   // 🆕 Search state
   const [searchTerm, setSearchTerm] = useState("");
@@ -31,107 +35,112 @@ export default function FeesDashboard() {
   const [pupilsPage, setPupilsPage] = useState(1);
 
   // --- Fetch all academic years ---
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, "PupilsReg"), (snapshot) => {
-      const pupils = snapshot.docs.map((doc) => doc.data());
-      const years = [...new Set(pupils.map((p) => p.academicYear))].sort().reverse();
-      setAllYears(years);
-      if (!academicYear && years.length) {
-        setAcademicYear(years[0]);
-      }
+// --- Academic Years & Pupils ---
+useEffect(() => {
+  if (!schoolId) return;
+  const q = query(collection(db, "PupilsReg"), where("schoolId", "==", schoolId));
+  const unsub = onSnapshot(q, (snapshot) => {
+    const pupils = snapshot.docs.map((doc) => doc.data());
+    const years = [...new Set(pupils.map((p) => p.academicYear))].sort().reverse();
+    setAllYears(years);
+    if (!academicYear && years.length) setAcademicYear(years[0]);
+  });
+  return () => unsub();
+}, [academicYear, schoolId]);
+
+
+// --- Pupils Per Class chart & Full Pupil List for Selected Year ---
+useEffect(() => {
+  if (!academicYear || !schoolId) return;
+  const pupilsRef = collection(db, "PupilsReg");
+  const q = query(
+    pupilsRef,
+    where("academicYear", "==", academicYear),
+    where("schoolId", "==", schoolId)
+  );
+
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const pupils = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    setAllPupils(pupils);
+    const counts = {};
+    pupils.forEach((pupil) => {
+      const cls = pupil.class || "Unknown";
+      counts[cls] = (counts[cls] || 0) + 1;
     });
-    return () => unsub();
-  }, [academicYear]);
+    const chartData = Object.keys(counts).sort().map((cls) => ({
+      class: cls,
+      pupils: counts[cls],
+    }));
+    setPupilsData(chartData);
+  });
+  return () => unsubscribe();
+}, [academicYear, schoolId]);
 
-  // --- Fetch pupils per academic year ---
-  useEffect(() => {
-    if (!academicYear) return;
-    const pupilsRef = collection(db, "PupilsReg");
-    const q = query(pupilsRef, where("academicYear", "==", academicYear));
+// --- Fetch FeesCost ---
+useEffect(() => {
+  if (!schoolId) return;
+  const feesCollectionRef = collection(db, "FeesCost");
+  const q = query(feesCollectionRef, where("schoolId", "==", schoolId));
+  const unsubscribeFees = onSnapshot(
+    q,
+    (snapshot) => {
+      const feeList = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setFeesCost(feeList);
+    },
+    (error) => {
+      console.error("Error fetching fees cost:", error);
+      toast.error("Failed to load fee structures.");
+    }
+  );
+  return () => unsubscribeFees();
+}, [schoolId]);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const pupils = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setAllPupils(pupils);
+// --- Fetch Receipts & Calculate Outstanding ---
+useEffect(() => {
+  if (!academicYear || feesCost.length === 0 || !schoolId) return;
+  const receiptsRef = collection(db, "Receipts");
+  const q = query(
+    receiptsRef,
+    where("academicYear", "==", academicYear),
+    where("schoolId", "==", schoolId)
+  );
 
-      // Bar chart data
-      const counts = {};
-      pupils.forEach((pupil) => {
-        const cls = pupil.class || "Unknown";
-        counts[cls] = (counts[cls] || 0) + 1;
-      });
-      const chartData = Object.keys(counts)
-        .sort()
-        .map((cls) => ({ class: cls, pupils: counts[cls] }));
-      setPupilsData(chartData);
-    });
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const receipts = snapshot.docs.map((doc) => doc.data());
+    const studentMap = {};
 
-    return () => unsubscribe();
-  }, [academicYear]);
-
-  // --- Fetch FeesCost ---
-  useEffect(() => {
-    const feesCollectionRef = collection(db, "FeesCost");
-    const unsubscribeFees = onSnapshot(
-      feesCollectionRef,
-      (snapshot) => {
-        const feeList = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setFeesCost(feeList);
-      },
-      (error) => {
-        console.error("Error fetching fees cost:", error);
-        toast.error("Failed to load fee structures.");
-      }
-    );
-
-    return () => unsubscribeFees();
-  }, []);
-
-  // --- Fetch Receipts & Calculate Outstanding ---
-  useEffect(() => {
-    if (!academicYear || feesCost.length === 0) return;
-    const receiptsRef = collection(db, "Receipts");
-    const q = query(receiptsRef, where("academicYear", "==", academicYear));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const receipts = snapshot.docs.map((doc) => doc.data());
-      const studentMap = {};
-
-      receipts.forEach((r) => {
-        if (!studentMap[r.studentID]) {
-          studentMap[r.studentID] = {
-            studentID: r.studentID,
-            studentName: r.studentName,
-            class: r.class,
-            academicYear: r.academicYear,
-            totalPaid: 0,
-          };
-        }
-        studentMap[r.studentID].totalPaid += r.amount || 0;
-      });
-
-      const result = Object.values(studentMap).map((s) => {
-        const classFee = feesCost.find(
-          (f) => f.academicYear === s.academicYear && f.className === s.class
-        );
-        const totalFee = classFee ? classFee.totalAmount : 0;
-        return {
-          ...s,
-          totalFee,
-          outstanding: totalFee - s.totalPaid,
+    receipts.forEach((r) => {
+      if (!studentMap[r.studentID]) {
+        studentMap[r.studentID] = {
+          studentID: r.studentID,
+          studentName: r.studentName,
+          class: r.class,
+          academicYear: r.academicYear,
+          totalPaid: 0,
         };
-      });
-
-      setFeesOutstanding(result);
+      }
+      studentMap[r.studentID].totalPaid += r.amount || 0;
     });
 
-    return () => unsubscribe();
-  }, [academicYear, feesCost]);
+    const result = Object.values(studentMap).map((s) => {
+      const classFee = feesCost.find(
+        (f) =>
+          f.academicYear === s.academicYear &&
+          f.className === s.class
+      );
+      const totalFee = classFee ? classFee.totalAmount : 0;
+      return {
+        ...s,
+        totalFee,
+        outstanding: totalFee - s.totalPaid,
+      };
+    });
+
+    setFeesOutstanding(result);
+  });
+
+  return () => unsubscribe();
+}, [academicYear, feesCost, schoolId]);
 
   // --- Merge Pupils with Fees and Receipts ---
   const mergedPupilsWithFees = useMemo(() => {

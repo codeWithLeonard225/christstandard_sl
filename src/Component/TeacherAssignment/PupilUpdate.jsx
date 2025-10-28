@@ -5,26 +5,19 @@ import { toast } from "react-toastify";
 import { db } from "../../../firebase";
 import {
     collection,
-    addDoc,
     doc,
-    deleteDoc,
     updateDoc,
     query,
     onSnapshot,
     where
 } from "firebase/firestore";
-import { v4 as uuidv4 } from "uuid";
 import { useLocation } from "react-router-dom";
-// 🚨 IMPORTANT: Make sure you import your custom useAuth hook
 import { useAuth } from "../Security/AuthContext";
 
 // Cloudinary config
-const CLOUD_NAME = "doucdnzij"; // Cloudinary Cloud Name
-const UPLOAD_PRESET = "Nardone"; // Cloudinary Upload Preset
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-
-// Define your admin password. For a real app, this should be in an environment variable.
-const ADMIN_PASSWORD = "1234";
+const CLOUD_NAME = "dxcrlpike";
+const UPLOAD_PRESET = "LeoTechSl Projects";
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 // Helper function to calculate age from DOB
 const calculateAge = (dob) => {
@@ -40,18 +33,18 @@ const calculateAge = (dob) => {
 };
 
 
-const Registration = () => {
+const PupilUpdate = () => {
     const location = useLocation();
-    // 1. Get user and auth state from context
     const { user } = useAuth();
-
-    // ✅ CONSOLIDATED SCHOOL ID LOGIC: 
-    // Prioritize ID from route state, then fall back to the authenticated user's ID.
+    
+    // --- ACCESS CONTROL LOGIC ---
+    // Removed unused variables: userRole, isUpdateOnlyUser, canModifyPupil
     const currentSchoolId = location.state?.schoolId || user?.schoolId || "N/A";
 
+    // Initial state setup 
     const [formData, setFormData] = useState({
         id: null,
-        studentID: uuidv4().slice(0, 8),
+        studentID: null, 
         studentName: "",
         dob: "",
         age: "",
@@ -67,37 +60,32 @@ const Registration = () => {
         userPhoto: null,
         userPublicId: null,
         pupilType: "",
-        // Use the consolidated ID here
         schoolId: currentSchoolId,
     });
+
+    // ⭐ NEW STATE FOR HIGHLIGHTING THE ROW ⭐
+    const [selectedPupilId, setSelectedPupilId] = useState(null);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [showCamera, setShowCamera] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
-    // This state will ONLY hold the students for the current school due to the Firestore query below
     const [users, setUsers] = useState([]);
     const [originalAcademicInfo, setOriginalAcademicInfo] = useState(null);
     const [classOptions, setClassOptions] = useState([]);
-    
-    // ⭐ NEW STATE 1: To hold the fetched pupil access types
     const [accessTypeOptions, setAccessTypeOptions] = useState([]);
-    // ⭐ NEW STATE 2: To prevent re-setting the default type
-    const [hasSetDefaultType, setHasSetDefaultType] = useState(false);
 
 
-    // ✅ EFFECT 1: Set form data defaults (schoolId, registeredBy)
+    // ✅ EFFECT 1: Set form data defaults
     useEffect(() => {
         const idToUse = currentSchoolId === "N/A" ? "" : currentSchoolId;
 
         setFormData(prev => ({
             ...prev,
             schoolId: idToUse,
-            // Auto-fill the registeredBy field 
             registeredBy: user?.data?.adminID || user?.data?.teacherID || ""
         }));
-
     }, [user, currentSchoolId]);
 
     // Calculate age whenever DOB changes
@@ -110,34 +98,43 @@ const Registration = () => {
 
 
     // ✅ EFFECT 2: Real-Time LISTENER for Students (PupilsReg collection)
-    useEffect(() => {
-        // Only set up the listener if we have a valid school ID
-        if (!currentSchoolId || currentSchoolId === "N/A") {
-            setUsers([]);
-            return;
-        }
+  useEffect(() => {
+  if (!currentSchoolId || currentSchoolId === "N/A") {
+    setUsers([]);
+    return;
+  }
 
-        const collectionRef = collection(db, "PupilsReg");
+  const collectionRef = collection(db, "PupilsReg");
 
-        // This query FILTERS the data by schoolId on the Firestore server
-        const q = query(collectionRef, where("schoolId", "==", currentSchoolId));
+  // ✅ If a class user logs in, filter by their class
+  const isClassUser = user?.role === "teacher" && user?.data?.className;
+  const className = user?.data?.className || null;
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const usersList = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
-            // 'users' now only contains students belonging to the currentSchoolId.
-            setUsers(usersList);
-        }, (error) => {
-            console.error("Firestore 'PupilsReg' onSnapshot failed:", error);
-            toast.error("Failed to stream student data.");
-        });
+  let q;
+  if (isClassUser && className) {
+    q = query(
+      collectionRef,
+      where("schoolId", "==", currentSchoolId),
+      where("class", "==", className)
+    );
+  } else {
+    // Default: show all pupils in the school
+    q = query(collectionRef, where("schoolId", "==", currentSchoolId));
+  }
 
-        return () => unsubscribe();
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const usersList = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    setUsers(usersList);
+  }, (error) => {
+    console.error("Firestore 'PupilsReg' onSnapshot failed:", error);
+    toast.error("Failed to stream student data.");
+  });
 
-    }, [currentSchoolId]);
-    // 🛑 The redundant useEffect that fetched all users is now removed.
+  return () => unsubscribe();
+}, [currentSchoolId, user]);
 
 
     // ✅ EFFECT 3: Fetch classes based on schoolId
@@ -148,7 +145,6 @@ const Registration = () => {
         }
 
         const classRef = collection(db, "Classes");
-        // Filter classes by schoolId
         const q = query(classRef, where("schoolId", "==", currentSchoolId));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -166,48 +162,33 @@ const Registration = () => {
     }, [currentSchoolId]);
 
     
-    // ⭐ NEW EFFECT 4: Fetch Pupil Access Types based on schoolId
-    // ⭐ REVISED EFFECT 4: Fetch Pupil Access Types based on schoolId and set default
-    useEffect(() => {
-        if (!currentSchoolId || currentSchoolId === "N/A") {
-            setAccessTypeOptions([]);
-            return;
-        }
+    // ✅ EFFECT 4: Fetch Pupil Access Types based on schoolId
+    useEffect(() => {
+        if (!currentSchoolId || currentSchoolId === "N/A") {
+            setAccessTypeOptions([]);
+            return;
+        }
 
-        const accessTypesRef = collection(db, "SchoolAccess"); // Using your specified collection name
-        const q = query(accessTypesRef, where("schoolId", "==", currentSchoolId));
+        const accessTypesRef = collection(db, "SchoolAccess"); 
+        const q = query(accessTypesRef, where("schoolId", "==", currentSchoolId));
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            // ✅ CORRECTION: Use flatMap to extract and flatten the 'accessType' array from documents
-            const options = snapshot.docs
-                .flatMap(doc => doc.data().accessType || []) 
-                .filter(Boolean)
-                .sort((a, b) => a.localeCompare(b));
-            
-            setAccessTypeOptions(options);
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const options = snapshot.docs
+                .flatMap(doc => doc.data().accessType || []) 
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b));
+            
+            setAccessTypeOptions(options);
 
-            // ⭐ DEFAULT LOGIC: Set the first fetched access type (index 0) as default
-            // only if we are registering a new student (no formData.id), options are available, 
-            // and the default hasn't been set yet.
-            if (!formData.id && options.length > 0 && formData.pupilType === "" && !hasSetDefaultType) {
-                setFormData(prev => ({ 
-                    ...prev, 
-                    // Sets the default to the element at the 0 index
-                    pupilType: options[0] 
-                }));
-                setHasSetDefaultType(true); // Mark as set
-            }
-        }, (error) => {
-            console.error("Firestore 'SchoolAccess' onSnapshot failed:", error);
-            toast.error("Failed to fetch pupil access types.");
-        });
+        }, (error) => {
+            console.error("Firestore 'SchoolAccess' onSnapshot failed:", error);
+            toast.error("Failed to fetch pupil access types.");
+        });
 
-        return () => unsubscribe();
-    // Re-evaluate if currentSchoolId changes, or if we transition from update (formData.id) to register
-    }, [currentSchoolId, formData.id, formData.pupilType, hasSetDefaultType]);
+        return () => unsubscribe();
+    }, [currentSchoolId]);
 
     
-    // 🔎 FILTER LOGIC: Simplified, as 'users' is already school-filtered
     // 🔎 FILTER & SORT LOGIC
     const filteredUsers = useMemo(() => {
         let filtered = users;
@@ -225,30 +206,12 @@ const Registration = () => {
             });
         }
 
-        // Sort by studentName ASC
         return filtered.sort((a, b) => {
             if (!a.studentName) return 1;
             if (!b.studentName) return -1;
             return a.studentName.localeCompare(b.studentName);
         });
     }, [users, searchTerm]);
-
-
-    // ... (rest of helper functions: generateUniqueId, handleInputChange, etc.)
-
-    const generateUniqueId = () => {
-        let newId;
-        do {
-            newId = uuidv4().slice(0, 8);
-        } while (users.find((u) => u.studentID === newId));
-        return newId;
-    };
-
-    useEffect(() => {
-        if (!formData.id) {
-            setFormData((prev) => ({ ...prev, studentID: generateUniqueId() }));
-        }
-    }, [users, formData.id]);
 
 
     const handleInputChange = (e) => {
@@ -268,6 +231,7 @@ const Registration = () => {
     const handleCameraCapture = async (base64Data) => {
         setIsUploading(true);
         setUploadProgress(0);
+        // ... (handleCameraCapture logic remains the same) ...
         try {
             const res = await fetch(base64Data);
             const blob = await res.blob();
@@ -300,7 +264,7 @@ const Registration = () => {
             const formDataObj = new FormData();
             formDataObj.append("file", blob);
             formDataObj.append("upload_preset", UPLOAD_PRESET);
-            formDataObj.append("folder", "ChristStandard_Photos");
+            formDataObj.append("folder", "SchoolAppPupils/Uploads");
 
             xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`);
             xhr.send(formDataObj);
@@ -311,9 +275,44 @@ const Registration = () => {
             setShowCamera(false);
         }
     };
+    
+    const handleClearForm = () => {
+        setFormData(prev => ({
+            id: null,
+            studentID: null, 
+            studentName: "",
+            dob: "",
+            age: "",
+            gender: "",
+            addressLine1: "",
+            addressLine2: "",
+            parentName: "",
+            parentPhone: "",
+            class: "",
+            academicYear: "",
+            pupilType: "",
+            registrationDate: new Date().toISOString().slice(0, 10),
+            registeredBy: user?.data?.adminID || user?.data?.teacherID || "",
+            userPhoto: null,
+            userPublicId: null,
+            schoolId: currentSchoolId,
+        }));
+        setOriginalAcademicInfo(null);
+        // ⭐ CLEAR THE SELECTED PUPIL ID ⭐
+        setSelectedPupilId(null);
+        toast.info("Form cleared. Select a pupil from the list to update.");
+    };
 
-    const handleSubmit = async (e) => {
+    // ⭐ MODIFIED SUBMISSION FUNCTION TO CLEAR FORM AFTER SUCCESS ⭐
+    const handleUpdateSubmission = async (e) => {
         e.preventDefault();
+        
+        if (!formData.id) {
+             toast.error("You must select a pupil from the table below to update their information.");
+             setIsSubmitting(false);
+             return;
+        }
+
         // ✅ Custom validation
         if (!formData.studentName.trim()) {
             toast.error("Student name is required.");
@@ -351,70 +350,36 @@ const Registration = () => {
                 registeredBy: formData.registeredBy,
                 userPhotoUrl: formData.userPhoto,
                 userPublicId: formData.userPublicId,
-                pupilType: formData.pupilType, // ✅ NEW FIELD
+                pupilType: formData.pupilType,
                 schoolId: formData.schoolId,
             };
 
-            if (formData.id) {
-                const userRef = doc(db, "PupilsReg", formData.id);
-                await updateDoc(userRef, studentData);
-                toast.success("Student updated successfully!");
-            } else {
-                const uniqueId = generateUniqueId();
-                await addDoc(collection(db, "PupilsReg"), {
-                    ...studentData,
-                    studentID: uniqueId,
-                    timestamp: new Date(),
-                });
-                toast.success("Student registered successfully!");
-            }
+            // UPDATE logic
+            const userRef = doc(db, "PupilsReg", formData.id);
+            await updateDoc(userRef, studentData);
+            toast.success("Student updated successfully!");
+            
+            // ⭐ CALL THE CLEAR FUNCTION AFTER SUCCESSFUL UPDATE ⭐
+            handleClearForm();
 
-            // Reset form data after submission
-            setFormData({
-                id: null,
-                studentID: generateUniqueId(),
-                studentName: "",
-                dob: "",
-                age: "",
-                gender: "",
-                addressLine1: "",
-                addressLine2: "",
-                parentName: "",
-                parentPhone: "",
-                class: "",
-                academicYear: "",
-                // Set pupilType to the first available option, or empty if none are fetched
-              pupilType: accessTypeOptions.length > 0 ? accessTypeOptions[0] : "",
-                registrationDate: new Date().toISOString().slice(0, 10),
-                registeredBy: user?.data?.adminID || user?.data?.teacherID || "",
-                userPhoto: null,
-                userPublicId: null,
-                schoolId: currentSchoolId, // Use the current consolidated schoolId
-            });
-            // Reset state that controls the default setting
-            setHasSetDefaultType(false); 
-            // Clear original academic info state on form reset
-            setOriginalAcademicInfo(null);
-        
         } catch (err) {
             console.error(err);
-            toast.error(`Failed to ${formData.id ? "update" : "register"} student.`);
+            toast.error("Failed to update student.");
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const handleUpdate = (user) => {
-        // Save the student's *current* academic details for display during edit
+        // ⭐ SET THE SELECTED PUPIL ID WHEN EDIT IS CLICKED ⭐
+        setSelectedPupilId(user.id);
+
+        // Resetting the form when starting an update
         setOriginalAcademicInfo({
             class: user.class,
             academicYear: user.academicYear,
         });
         
-        // Reset default type flag when updating an existing record
-        setHasSetDefaultType(true);
-        
-
         setFormData({
             id: user.id,
             studentID: user.studentID,
@@ -433,45 +398,27 @@ const Registration = () => {
             userPhoto: user.userPhotoUrl,
             userPublicId: user.userPublicId,
             schoolId: user.schoolId || "",
-            pupilType: user.pupilType || "", // ✅ Added pupilType
+            pupilType: user.pupilType || "",
         });
         toast.info(`Editing student: ${user.studentName}`);
     };
-
-    const handleDelete = async (id, studentName) => {
-        const password = window.prompt("Enter the password to delete this user:");
-        if (password === ADMIN_PASSWORD) {
-            if (window.confirm(`Are you sure you want to delete student: ${studentName}?`)) {
-                try {
-                    await deleteDoc(doc(db, "PupilsReg", id));
-                    toast.success("Student deleted successfully!");
-                } catch (err) {
-                    console.error("Failed to delete user:", err);
-                    toast.error("Failed to delete user.");
-                }
-            }
-        } else if (password !== null) {
-            toast.error("Incorrect password.");
-        }
-    };
+    
+    // ⭐ REMOVED handleDelete FUNCTION ENTIRELY ⭐
+    // ... (removed handleDelete function) ...
 
     return (
         <div className="flex flex-col items-center min-h-screen bg-gray-100 p-6 space-y-6">
-            <form onSubmit={handleSubmit} className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-2xl">
-                <h2 className="text-2xl font-bold text-center mb-4">{formData.id ? "Update Student" : "Student Registration"}</h2>
+            <form onSubmit={handleUpdateSubmission} className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-2xl">
+                {/* ⭐ MODIFIED HEADING ⭐ */}
+                <h2 className="text-2xl font-bold text-center mb-4">
+                    {formData.id ? `Updating Pupil: ${formData.studentName}` : "Pupil Update & Search"}
+                </h2>
+                <p className="text-center text-red-500 mb-4 font-semibold">
+                    **Use the table below to select a pupil for updating.**
+                </p>
 
                 {/* --- STUDENT CORE INFO --- */}
                 <h3 className="text-lg font-semibold mt-4 mb-2">Student Core Information</h3>
-                 {/* 🏫 School ID (read-only field) */}
-        {/* <div className="mb-4">
-          <label className="block mb-2 font-medium text-sm text-gray-700">School ID</label>
-          <input
-            type="text"
-            value={schoolId}
-            readOnly
-            className="w-full p-2 border rounded-lg bg-gray-100 text-gray-600"
-          />
-        </div> */}
 
                 <div className="flex flex-col md:flex-row md:space-x-4">
                     <div className="flex-1">
@@ -479,7 +426,7 @@ const Registration = () => {
                         <input
                             type="text"
                             name="studentID"
-                            value={formData.studentID}
+                            value={formData.studentID || "N/A"}
                             readOnly
                             disabled
                             className="w-full p-2 mb-4 border rounded-lg bg-gray-100"
@@ -492,7 +439,9 @@ const Registration = () => {
                             name="studentName"
                             value={formData.studentName}
                             onChange={handleInputChange}
-                            className="w-full p-2 mb-4 border rounded-lg"
+                            // Require an existing record to be loaded before editing
+                            disabled={!formData.id} 
+                            className="w-full p-2 mb-4 border rounded-lg disabled:bg-gray-100"
                             required
                         />
                     </div>
@@ -507,8 +456,8 @@ const Registration = () => {
                             name="dob"
                             value={formData.dob}
                             onChange={handleInputChange}
-                            className="w-full p-2 mb-4 border rounded-lg"
-
+                            disabled={!formData.id}
+                            className="w-full p-2 mb-4 border rounded-lg disabled:bg-gray-100"
                         />
                     </div>
                     <div className="w-1/3">
@@ -524,7 +473,7 @@ const Registration = () => {
                     </div>
                     <div className="w-1/3">
                         <label className="block mb-2 font-medium text-sm">Gender</label>
-                        <select name="gender" value={formData.gender} onChange={handleInputChange} className="w-full p-2 mb-4 border rounded-lg" >
+                        <select name="gender" value={formData.gender} onChange={handleInputChange} disabled={!formData.id} className="w-full p-2 mb-4 border rounded-lg disabled:bg-gray-100" >
                             <option value="">Select Gender</option>
                             <option value="Male">Male</option>
                             <option value="Female">Female</option>
@@ -533,72 +482,17 @@ const Registration = () => {
                     </div>
                 </div>
 
-                {/* --- ADDRESS INFORMATION --- */}
-                <h3 className="text-lg font-semibold mt-4 mb-2 border-t pt-4">Residential Address</h3>
-                <div className="flex flex-col md:flex-row md:space-x-4">
-                    <div className="flex-1">
-                        <label className="block mb-2 font-medium text-sm">Address Line 1</label>
-                        <input
-                            type="text"
-                            name="addressLine1"
-                            value={formData.addressLine1}
-                            onChange={handleInputChange}
-                            className="w-full p-2 mb-4 border rounded-lg"
-
-                        />
-                    </div>
-                    <div className="flex-1">
-                        <label className="block mb-2 font-medium text-sm">Address Line 2 (Optional)</label>
-                        <input
-                            type="text"
-                            name="addressLine2"
-                            value={formData.addressLine2}
-                            onChange={handleInputChange}
-                            className="w-full p-2 mb-4 border rounded-lg"
-                        />
-                    </div>
-                </div>
-
-                {/* --- PARENT INFO --- */}
-                <h3 className="text-lg font-semibold mt-4 mb-2 border-t pt-4">Parent/Guardian Information</h3>
-                <div className="flex flex-col md:flex-row md:space-x-4">
-                    <div className="flex-1">
-                        <label className="block mb-2 font-medium text-sm">Parent/Guardian Name</label>
-                        <input
-                            type="text"
-                            name="parentName"
-                            value={formData.parentName}
-                            onChange={handleInputChange}
-                            className="w-full p-2 mb-4 border rounded-lg"
-
-                        />
-                    </div>
-                    <div className="flex-1">
-                        <label className="block mb-2 font-medium text-sm">Parent/Guardian Phone</label>
-                        <input
-                            type="tel"
-                            name="parentPhone"
-                            value={formData.parentPhone}
-                            onChange={handleInputChange}
-                            className="w-full p-2 mb-4 border rounded-lg"
-
-                        />
-                    </div>
-                </div>
-
                 {/* --- ACADEMIC & SYSTEM INFO --- */}
                 <h3 className="text-lg font-semibold mt-4 mb-2 border-t pt-4">Academic & System Info</h3>
                 <div className="flex flex-col md:flex-row md:space-x-4">
                     <div className="flex-1">
                         <label className="block mb-2 font-medium text-sm">Class</label>
-                        <select name="class" value={formData.class} onChange={handleInputChange} className="w-full p-2 border rounded-lg" required >
+                        <select name="class" value={formData.class} onChange={handleInputChange} disabled={!formData.id} className="w-full p-2 border rounded-lg disabled:bg-gray-100" required >
                             <option value="">Select Class</option>
-                            {/* Use the fetched classOptions state */}
                             {classOptions.map(c => (
                                 <option key={c} value={c}>{c}</option>
                             ))}
                         </select>
-                        {/* Display Previous Class */}
                         {formData.id && originalAcademicInfo && (
                             <p className="text-xs text-gray-500 mt-1 mb-4" required>
                                 **Previous Class:** <span className="font-semibold text-blue-600">{originalAcademicInfo.class}</span>
@@ -607,11 +501,10 @@ const Registration = () => {
                     </div>
                     <div className="flex-1">
                         <label className="block mb-2 font-medium text-sm">Academic Year</label>
-                        <select name="academicYear" value={formData.academicYear} onChange={handleInputChange} className="w-full p-2 border rounded-lg" required >
+                        <select name="academicYear" value={formData.academicYear} onChange={handleInputChange} disabled={!formData.id} className="w-full p-2 border rounded-lg disabled:bg-gray-100" required >
                             <option value="">Select Year</option>
                             <option value="2025/2026">2025/2026</option>
                         </select>
-                        {/* Display Previous Year */}
                         {formData.id && originalAcademicInfo && (
                             <p className="text-xs text-gray-500 mt-1 mb-4">
                                 **Previous Year:** <span className="font-semibold text-blue-600">{originalAcademicInfo.academicYear}</span>
@@ -628,8 +521,8 @@ const Registration = () => {
                             name="registrationDate"
                             value={formData.registrationDate}
                             onChange={handleInputChange}
-                            className="w-full p-2 mb-4 border rounded-lg"
-
+                            disabled={!formData.id}
+                            className="w-full p-2 mb-4 border rounded-lg disabled:bg-gray-100"
                         />
                     </div>
 
@@ -639,27 +532,20 @@ const Registration = () => {
                             name="pupilType"
                             value={formData.pupilType}
                             onChange={handleInputChange}
-                            className="w-full p-2 border rounded-lg"
+                            disabled={!formData.id}
+                            className="w-full p-2 border rounded-lg disabled:bg-gray-100"
                             required
                         >
-                            <option value="" disabled={accessTypeOptions.length > 0}>
+                            <option value="" >
                                 {accessTypeOptions.length > 0 ? "Select Type" : "Loading Types..."}
                             </option>
-                            {/* ⭐ RENDER DYNAMIC OPTIONS ⭐ */}
                             {accessTypeOptions.map(type => (
                                 <option key={type} value={type}>
                                     {type}
                                 </option>
                             ))}
                         </select>
-                        {/* // 🛑 Original hardcoded options removed:
-                            <option value="Boarder">Boarder</option>
-                            <option value="Day Pupil">Day Pupil</option>
-                            <option value="Scholarship">Scholarship</option>
-                        */}
                     </div>
-
-
                 </div>
 
                 {/* --- PHOTO UPLOAD --- */}
@@ -673,8 +559,15 @@ const Registration = () => {
                         onUploadStart={() => { setIsUploading(true); setUploadProgress(0); }}
                         onUploadProgress={setUploadProgress}
                         onUploadComplete={() => setIsUploading(false)}
+                        // Disable upload if no student is selected for update
+                        disabled={!formData.id} 
                     />
-                    <button type="button" onClick={() => setShowCamera(true)} className="w-full sm:w-auto bg-green-600 text-white py-2 px-6 rounded-md text-sm font-semibold mt-2" disabled={isUploading}>
+                    <button 
+                        type="button" 
+                        onClick={() => setShowCamera(true)} 
+                        className="w-full sm:w-auto bg-green-600 text-white py-2 px-6 rounded-md text-sm font-semibold mt-2 disabled:bg-gray-400" 
+                        disabled={isUploading || !formData.id}
+                    >
                         Use Camera
                     </button>
                     {isUploading && (
@@ -683,10 +576,26 @@ const Registration = () => {
                         </div>
                     )}
                 </div>
-
-                <button type="submit" disabled={isSubmitting || isUploading} className="w-full bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition disabled:bg-gray-400">
-                    {isSubmitting ? "Submitting..." : formData.id ? "Update Student" : "Submit"}
+                
+                <button 
+                    type="submit" 
+                    // Button is only active when an ID is loaded
+                    disabled={isSubmitting || isUploading || !formData.id} 
+                    className="w-full bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition disabled:bg-gray-400"
+                >
+                    {isSubmitting ? "Updating..." : "Update Student"}
                 </button>
+
+                {/* ⭐ ADDED A CLEAR/CANCEL BUTTON ⭐ */}
+                <button 
+                    type="button" 
+                    onClick={handleClearForm} 
+                    className="w-full bg-gray-500 text-white p-2 rounded-lg hover:bg-gray-600 transition disabled:bg-gray-400 mt-2"
+                    disabled={isSubmitting || isUploading}
+                >
+                    Clear Form / Cancel Edit
+                </button>
+
             </form>
 
             {showCamera && <CameraCapture setPhoto={handleCameraCapture} onClose={() => setShowCamera(false)} initialFacingMode="user" />}
@@ -695,14 +604,9 @@ const Registration = () => {
             {/* --- REGISTERED STUDENTS TABLE --- */}
             {/* ---------------------------------------------------- */}
             <div className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-full lg:max-w-4xl">
-                {/* ✅ Student count is now correct! 
-                    It shows the number of students displayed (filteredUsers) 
-                    out of the total students fetched for the school (users).
-                */}
-                <h2 className="text-2xl font-bold text-center mb-4">Registered Students ({filteredUsers.length} of {users.length})</h2>
+                <h2 className="text-2xl font-bold text-center mb-4">Select Student for Update ({filteredUsers.length} total)</h2>
 
                 <div className="mb-6">
-                    {/* Single Search Input for Name OR Class */}
                     <input
                         type="text"
                         placeholder="Search by Student Name OR Class (e.g., John or Grade 7)"
@@ -711,7 +615,6 @@ const Registration = () => {
                         className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
                     />
                 </div>
-
 
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -723,42 +626,48 @@ const Registration = () => {
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Gender</th>
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">AcademicYear</th>
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Photo</th>
-                                <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
-                                    Pupil Type
-                                </th>
-
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {/* Loop over the filteredUsers array */}
+                        <tbody className="divide-y divide-gray-200">
                             {filteredUsers.map((user) => (
-                                <tr key={user.id}>
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.studentID}</td>
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{user.studentName}</td>
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{user.class}</td>
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{user.gender}</td>
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{user.academicYear}</td>
-
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {user.userPhotoUrl && (
-                                            <img src={user.userPhotoUrl} alt={user.studentName} className="h-10 w-10 rounded-full object-cover" />
+                                <tr 
+                                    key={user.id} 
+                                    // ⭐ HIGHLIGHT THE SELECTED ROW WITH YELLOW BACKGROUND ⭐
+                                    className={`
+                                        ${user.id === selectedPupilId ? 'bg-yellow-100 hover:bg-yellow-200' : 'bg-white hover:bg-gray-50'}
+                                    `}
+                                >
+                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">{user.studentID}</td>
+                                    <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-blue-600">{user.studentName}</td>
+                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{user.class}</td>
+                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{user.gender}</td>
+                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">{user.academicYear}</td>
+                                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                                        {user.userPhotoUrl ? (
+                                            <img src={user.userPhotoUrl} alt="Photo" className="h-10 w-10 rounded-full object-cover" />
+                                        ) : (
+                                            "N/A"
                                         )}
                                     </td>
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
-                                        {user.pupilType}
-                                    </td>
-
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
-                                        <button onClick={() => handleUpdate(user)} className="text-indigo-600 hover:text-indigo-900 mr-2">
-                                            Update
+                                    <td className="px-3 py-3 whitespace-nowrap text-sm font-medium">
+                                        <button
+                                            onClick={() => handleUpdate(user)}
+                                            className="text-indigo-600 hover:text-indigo-900 mr-2 p-1 font-semibold"
+                                        >
+                                            Edit
                                         </button>
-                                        <button onClick={() => handleDelete(user.id, user.studentName)} className="text-red-600 hover:text-red-900">
-                                            Delete
-                                        </button>
+                                        {/* ⭐ REMOVED DELETE BUTTON ENTIRELY ⭐ */}
                                     </td>
                                 </tr>
                             ))}
+                            {filteredUsers.length === 0 && (
+                                <tr>
+                                    <td colSpan="8" className="px-3 py-4 text-center text-gray-500">
+                                        No students found for this school matching the search criteria.
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -767,4 +676,4 @@ const Registration = () => {
     );
 };
 
-export default Registration;
+export default PupilUpdate;

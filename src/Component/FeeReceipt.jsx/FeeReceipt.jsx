@@ -4,6 +4,7 @@ import CloudinaryImageUploader from "../CaptureCamera/CloudinaryImageUploader";
 import { toast } from "react-toastify";
 import { db } from "../../../firebase";
 import { useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import {
     collection,
     addDoc,
@@ -20,11 +21,11 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 // Cloudinary config (Kept from your template)
-const CLOUD_NAME = "doucdnzij";
-const UPLOAD_PRESET = "Nardone";
+const CLOUD_NAME = "doucdnzij"; // Cloudinary Cloud Name
+const UPLOAD_PRESET = "Nardone"; // Cloudinary Upload Preset
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
-const FEE_TYPES = ["Term 1", "Term 2", "Term 3", "Other"];
+const FEE_TYPES = ["Term 1", "Term 2", "Term 3"];
 const ADMIN_PASSWORD = "1234"; // Define your admin password
 
 // Helper function to generate a new unique receipt ID
@@ -47,6 +48,10 @@ const getCurrentAcademicYear = () => {
 };
 
 const FeesReceipt = () => {
+
+    const location = useLocation();
+    const schoolId = location.state?.schoolId || "N/A"; // fallback if missing
+
     // --- State Management ---
     const [searchTerm, setSearchTerm] = useState("");
     const [students, setStudents] = useState([]);
@@ -87,6 +92,7 @@ const FeesReceipt = () => {
         receiptPhotoUrl: null,
         receiptPublicId: null,
         recordedBy: "Current User ID",
+        schoolId: schoolId, // ✅ Add this
     }), [defaultAcademicYear]);
 
     const [receiptData, setReceiptData] = useState(initialReceiptState);
@@ -113,8 +119,14 @@ const FeesReceipt = () => {
 
     // 1. REAL-TIME FEES COST LISTENER
     useEffect(() => {
+        if (!schoolId || schoolId === "N/A") return;
+
         const feesCollectionRef = collection(db, "FeesCost");
-        const q = query(feesCollectionRef);
+        const q = query(
+            feesCollectionRef,
+            where("schoolId", "==", schoolId),
+            // orderBy("className", "asc")
+        );
 
         const unsubscribeFees = onSnapshot(q, (snapshot) => {
             const feeList = snapshot.docs.map(doc => ({
@@ -128,7 +140,8 @@ const FeesReceipt = () => {
         });
 
         return () => unsubscribeFees();
-    }, []);
+    }, [schoolId]);
+
 
     // 2. REAL-TIME STUDENT LISTENER
     useEffect(() => {
@@ -137,35 +150,30 @@ const FeesReceipt = () => {
             return;
         }
 
-        const votersCollectionRef = collection(db, "PupilsReg");
-        const q = query(
-            votersCollectionRef,
-            where("studentName", ">=", searchTerm),
-            where("studentName", "<=", searchTerm + "\uf8ff"),
-            limit(10)
-        );
-
+        const pupilsRef = collection(db, "PupilsReg");
+        const q = query(pupilsRef, where("schoolId", "==", schoolId));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const studentList = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setStudents(studentList);
-        }, (error) => {
-            console.error("Error fetching students:", error);
+            const allStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const filtered = allStudents
+                .filter(s => s.studentName.toLowerCase().includes(searchTerm.toLowerCase()))
+                .slice(0, 10);
+            setStudents(filtered);
         });
 
         return () => unsubscribe();
-    }, [searchTerm]);
+    }, [searchTerm, schoolId]);
+
 
     // 3. REAL-TIME RECEIPTS LISTENER (for the table)
     useEffect(() => {
         const receiptsCollectionRef = collection(db, "Receipts");
         const q = query(
             receiptsCollectionRef,
-            orderBy("createdAt", "desc"),
+            where("schoolId", "==", schoolId),
+            // orderBy("createdAt", "desc"),
             limit(15)
         );
+
 
         const unsubscribeReceipts = onSnapshot(q, (snapshot) => {
             const receiptsList = snapshot.docs.map(doc => ({
@@ -223,147 +231,148 @@ const FeesReceipt = () => {
 
 
 
-const handleStudentSelect = async (student) => {
-    setSelectedStudent(student);
-    setSearchTerm(student.studentName);
-    setStudents([]);
+    const handleStudentSelect = async (student) => {
+        setSelectedStudent(student);
+        setSearchTerm(student.studentName);
+        setStudents([]);
 
-    try {
-        // =========================
-        // PART 1: Previous Academic Year
-        // =========================
-        const allYears = [...new Set(feesCost.map(fee => fee.academicYear))].sort(); // ascending
-        const latestIndex = allYears.indexOf(latestAcademicYear);
-        const previousAcademicYear = latestIndex > 0 ? allYears[latestIndex - 1] : null;
+        try {
+            // =========================
+            // PART 1: Previous Academic Year
+            // =========================
+            const allYears = [...new Set(feesCost.map(fee => fee.academicYear))].sort(); // ascending
+            const latestIndex = allYears.indexOf(latestAcademicYear);
+            const previousAcademicYear = latestIndex > 0 ? allYears[latestIndex - 1] : null;
+            let classToLookup = student.class; // fallback default
 
-        if (previousAcademicYear) {
+            if (previousAcademicYear) {
+                const receiptsCollectionRef = collection(db, "Receipts");
+                const q = query(receiptsCollectionRef, where("studentID", "==", student.studentID));
+                const snapshot = await getDocs(q);
+
+                let totalPaidPrevious = 0;
+                let previousClass = null;
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.academicYear === previousAcademicYear) {
+                        totalPaidPrevious += parseFloat(data.amount) || 0;
+                        if (!previousClass) previousClass = data.class;
+                    }
+                });
+
+                const classToLookup = previousClass || student.class;
+                const classFeeRecord = feesCost.find(
+                    fee => fee.className === classToLookup && fee.academicYear === previousAcademicYear
+                );
+
+                // Decide what to show in the modal
+                if (classFeeRecord) {
+                    const totalFeePrevious = parseFloat(classFeeRecord.totalAmount);
+                    const balancePrevious = totalFeePrevious - totalPaidPrevious;
+
+                    if (balancePrevious > 0) {
+                        // ✅ Show modal only if balance > 0
+                        setPreviousFeesData({
+                            studentName: student.studentName,
+                            studentID: student.studentID,
+                            academicYear: previousAcademicYear,
+                            class: classToLookup,
+                            totalFee: totalFeePrevious,
+                            totalPaid: totalPaidPrevious,
+                            balance: balancePrevious,
+                            message: totalPaidPrevious > 0
+                                ? "This is the final status for the previous academic year."
+                                : "No payments were made in the previous academic year."
+                        });
+
+                        setShowPreviousFeesModal(true);
+                    } else {
+                        // 🔹 No balance → show toast success
+                        toast.success(`${student.studentName} has no outstanding balance from ${previousAcademicYear} 🎉`);
+                        setPreviousFeesData(null);
+                        setShowPreviousFeesModal(false);
+                    }
+                }
+
+            }
+
+            // =========================
+            // PART 2: Latest Academic Year
+            // =========================
+            const latestClassFee = feesCost.find(
+                fee => fee.className === student.class && fee.academicYear === latestAcademicYear
+            );
+            const totalFeeLatest = latestClassFee ? parseFloat(latestClassFee.totalAmount) : 0;
+
+            if (!latestClassFee && student.class) {
+                toast.warn(`No default fee found for Class: ${student.class} in Academic Year: ${latestAcademicYear}.`);
+            }
+
+            // Fetch all receipts for this student
             const receiptsCollectionRef = collection(db, "Receipts");
-            const q = query(receiptsCollectionRef, where("studentID", "==", student.studentID));
-            const snapshot = await getDocs(q);
+            const qLatest = query(receiptsCollectionRef, where("studentID", "==", student.studentID));
+            const snapshotLatest = await getDocs(qLatest);
 
-            let totalPaidPrevious = 0;
-            let previousClass = null;
-
-            snapshot.forEach(doc => {
+            const grouped = {};
+            snapshotLatest.forEach(doc => {
                 const data = doc.data();
-                if (data.academicYear === previousAcademicYear) {
-                    totalPaidPrevious += parseFloat(data.amount) || 0;
-                    if (!previousClass) previousClass = data.class;
+                const key = `${data.studentID}-${data.studentName}-${data.class}-${data.academicYear}`;
+
+                if (!grouped[key]) {
+                    grouped[key] = {
+                        studentID: data.studentID,
+                        studentName: data.studentName,
+                        class: data.class,
+                        academicYear: data.academicYear,
+                        totalPaid: 0,
+                        totalFee: 0,
+                        balance: 0
+                    };
+                }
+
+                grouped[key].totalPaid += parseFloat(data.amount) || 0;
+
+                if (data.academicYear === latestAcademicYear) {
+                    grouped[key].totalFee = totalFeeLatest;
+                    grouped[key].balance = totalFeeLatest - grouped[key].totalPaid;
                 }
             });
 
-            const classToLookup = previousClass || student.class;
-            const classFeeRecord = feesCost.find(
-                fee => fee.className === classToLookup && fee.academicYear === previousAcademicYear
-            );
-
-            // Decide what to show in the modal
-           if (classFeeRecord) {
-    const totalFeePrevious = parseFloat(classFeeRecord.totalAmount);
-    const balancePrevious = totalFeePrevious - totalPaidPrevious;
-
-    if (balancePrevious > 0) {
-        // ✅ Show modal only if balance > 0
-        setPreviousFeesData({
-            studentName: student.studentName,
-            studentID: student.studentID,
-            academicYear: previousAcademicYear,
-            class: classToLookup,
-            totalFee: totalFeePrevious,
-            totalPaid: totalPaidPrevious,
-            balance: balancePrevious,
-            message: totalPaidPrevious > 0 
-                ? "This is the final status for the previous academic year."
-                : "No payments were made in the previous academic year."
-        });
-
-        setShowPreviousFeesModal(true);
-    } else {
-        // 🔹 No balance → show toast success
-        toast.success(`${student.studentName} has no outstanding balance from ${previousAcademicYear} 🎉`);
-        setPreviousFeesData(null);
-        setShowPreviousFeesModal(false);
-    }
-}
-
-        }
-
-        // =========================
-        // PART 2: Latest Academic Year
-        // =========================
-        const latestClassFee = feesCost.find(
-            fee => fee.className === student.class && fee.academicYear === latestAcademicYear
-        );
-        const totalFeeLatest = latestClassFee ? parseFloat(latestClassFee.totalAmount) : 0;
-
-        if (!latestClassFee && student.class) {
-            toast.warn(`No default fee found for Class: ${student.class} in Academic Year: ${latestAcademicYear}.`);
-        }
-
-        // Fetch all receipts for this student
-        const receiptsCollectionRef = collection(db, "Receipts");
-        const qLatest = query(receiptsCollectionRef, where("studentID", "==", student.studentID));
-        const snapshotLatest = await getDocs(qLatest);
-
-        const grouped = {};
-        snapshotLatest.forEach(doc => {
-            const data = doc.data();
-            const key = `${data.studentID}-${data.studentName}-${data.class}-${data.academicYear}`;
-
-            if (!grouped[key]) {
-                grouped[key] = {
-                    studentID: data.studentID,
-                    studentName: data.studentName,
-                    class: data.class,
-                    academicYear: data.academicYear,
+            const currentKey = `${student.studentID}-${student.studentName}-${student.class}-${latestAcademicYear}`;
+            if (!grouped[currentKey]) {
+                grouped[currentKey] = {
+                    studentID: student.studentID,
+                    studentName: student.studentName,
+                    class: student.class || 'N/A',
+                    academicYear: latestAcademicYear,
                     totalPaid: 0,
-                    totalFee: 0,
-                    balance: 0
+                    totalFee: totalFeeLatest,
+                    balance: totalFeeLatest
                 };
             }
 
-            grouped[key].totalPaid += parseFloat(data.amount) || 0;
+            const groupedArray = Object.values(grouped);
+            console.log("Grouped Receipts with Balance (Latest Academic Year):", groupedArray);
 
-            if (data.academicYear === latestAcademicYear) {
-                grouped[key].totalFee = totalFeeLatest;
-                grouped[key].balance = totalFeeLatest - grouped[key].totalPaid;
-            }
-        });
-
-        const currentKey = `${student.studentID}-${student.studentName}-${student.class}-${latestAcademicYear}`;
-        if (!grouped[currentKey]) {
-            grouped[currentKey] = {
+            // Update receiptData state
+            setReceiptData(prev => ({
+                ...prev,
+                studentDocId: student.id,
                 studentID: student.studentID,
                 studentName: student.studentName,
                 class: student.class || 'N/A',
+                amount: "", // user input
+                suggestedAmount: totalFeeLatest,
                 academicYear: latestAcademicYear,
-                totalPaid: 0,
-                totalFee: totalFeeLatest,
-                balance: totalFeeLatest
-            };
+                balance: totalFeeLatest // display in form
+            }));
+
+        } catch (err) {
+            console.error("Failed to compute balance:", err);
+            toast.error("Failed to calculate student balance.");
         }
-
-        const groupedArray = Object.values(grouped);
-        console.log("Grouped Receipts with Balance (Latest Academic Year):", groupedArray);
-
-        // Update receiptData state
-        setReceiptData(prev => ({
-            ...prev,
-            studentDocId: student.id,
-            studentID: student.studentID,
-            studentName: student.studentName,
-            class: student.class || 'N/A',
-            amount: "", // user input
-            suggestedAmount: totalFeeLatest,
-            academicYear: latestAcademicYear,
-            balance: totalFeeLatest // display in form
-        }));
-
-    } catch (err) {
-        console.error("Failed to compute balance:", err);
-        toast.error("Failed to calculate student balance.");
-    }
-};
+    };
 
 
 
@@ -484,7 +493,7 @@ const handleStudentSelect = async (student) => {
     };
 
 
-   const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setShowSuccessMessage(false);
 
@@ -498,8 +507,10 @@ const handleStudentSelect = async (student) => {
 
     try {
         // --- Calculate total fee & balance dynamically ---
+        // Use receiptData.class instead of classToLookup
+        const classToLookup = receiptData.class; // ✅ added this
         const classFeeRecord = feesCost.find(
-            fee => fee.className === receiptData.class && fee.academicYear === receiptData.academicYear
+            fee => fee.className === classToLookup && fee.academicYear === receiptData.academicYear
         );
 
         const totalFee = classFeeRecord ? parseFloat(classFeeRecord.totalAmount) : 0;
@@ -508,9 +519,10 @@ const handleStudentSelect = async (student) => {
         const finalReceiptData = {
             ...receiptData,
             amount: paidAmount,
-            totalFee,   // NEW: total fee field
-            balance,    // NEW: balance field
+            totalFee,   // total fee field
+            balance,    // balance field
             academicYear: receiptData.academicYear || defaultAcademicYear,
+            schoolId: schoolId, // ensure schoolId is saved
         };
 
         if (editingReceiptId) {
@@ -537,90 +549,91 @@ const handleStudentSelect = async (student) => {
 };
 
 
+
     useEffect(() => {
-  if (searchTerm === "") {
-    resetForm(); // reset all form fields and close modal
-  }
-}, [searchTerm]);
+        if (searchTerm === "") {
+            resetForm(); // reset all form fields and close modal
+        }
+    }, [searchTerm]);
 
     // Add this component inside the same file, or in a separate file like PreviousFeesModal.js
-const PreviousFeesModal = ({ data, onResetAndClose }) => {
-    // 💡 Must call the hook inside the functional component
-    const navigate = useNavigate(); 
-    if (!data) return null;
+    const PreviousFeesModal = ({ data, onResetAndClose }) => {
+        // 💡 Must call the hook inside the functional component
+        const navigate = useNavigate();
+        if (!data) return null;
 
-    const isBalanced = data.balance <= 0;
-    const balanceColor = isBalanced ? 'text-green-600' : 'text-red-600';
-    const balanceText = isBalanced ? 'Cleared' : `GHS ${data.balance.toFixed(2)} DUE`;
-    const balanceClass = isBalanced ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300';
-    
-    const handleViewHistory = () => {
-        // 1. Navigate to the student history page
-        navigate(`/student-history/${data.studentID}`);
-        // 2. Reset the form state in the background
-        onResetAndClose(); 
-    };
+        const isBalanced = data.balance <= 0;
+        const balanceColor = isBalanced ? 'text-green-600' : 'text-red-600';
+        const balanceText = isBalanced ? 'Cleared' : `GHS ${data.balance.toFixed(2)} DUE`;
+        const balanceClass = isBalanced ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300';
 
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg transform transition-all duration-300 scale-100">
-                <h3 className="text-2xl font-bold text-center mb-4 text-indigo-700">
-                    Previous Academic Year Status 🧾
-                </h3>
-                {/* ... (Data display) ... */}
+        const handleViewHistory = () => {
+            // 1. Navigate to the student history page
+            navigate(`/student-history/${data.studentID}`);
+            // 2. Reset the form state in the background
+            onResetAndClose();
+        };
 
-                <div className="grid grid-cols-2 gap-4 text-lg font-medium text-gray-700 mb-6">
-                    <div>
-                        <p>Total Fee (Expected):</p>
-                        <p className="font-bold text-blue-600">GHS {data.totalFee.toFixed(2)}</p>
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg transform transition-all duration-300 scale-100">
+                    <h3 className="text-2xl font-bold text-center mb-4 text-indigo-700">
+                        Previous Academic Year Status 🧾
+                    </h3>
+                    {/* ... (Data display) ... */}
+
+                    <div className="grid grid-cols-2 gap-4 text-lg font-medium text-gray-700 mb-6">
+                        <div>
+                            <p>Total Fee (Expected):</p>
+                            <p className="font-bold text-blue-600">GHS {data.totalFee.toFixed(2)}</p>
+                        </div>
+                        <div>
+                            <p>Total Paid:</p>
+                            <p className="font-bold text-green-700">GHS {data.totalPaid.toFixed(2)}</p>
+                        </div>
                     </div>
-                    <div>
-                        <p>Total Paid:</p>
-                        <p className="font-bold text-green-700">GHS {data.totalPaid.toFixed(2)}</p>
+
+                    <div className={`p-4 text-center rounded-lg border-2 ${balanceClass}`}>
+                        <p className="text-lg font-semibold">Outstanding Balance</p>
+                        <p className={`text-4xl font-extrabold ${balanceColor} mt-1`}>{balanceText}</p>
                     </div>
-                </div>
 
-                <div className={`p-4 text-center rounded-lg border-2 ${balanceClass}`}>
-                    <p className="text-lg font-semibold">Outstanding Balance</p>
-                    <p className={`text-4xl font-extrabold ${balanceColor} mt-1`}>{balanceText}</p>
-                </div>
-                
-                {/* Ensure you are passing a 'message' prop from handleStudentSelect */}
-                <p className="mt-4 text-sm text-center text-gray-500">
-                    This is the final status for the {data.academicYear} academic year.
-                </p>
+                    {/* Ensure you are passing a 'message' prop from handleStudentSelect */}
+                    <p className="mt-4 text-sm text-center text-gray-500">
+                        This is the final status for the {data.academicYear} academic year.
+                    </p>
 
-                <div className="mt-6 flex justify-end space-x-3">
-                    <button 
-                        onClick={handleViewHistory} 
-                        className="bg-indigo-500 text-white py-2 px-4 rounded-lg hover:bg-indigo-600 transition text-sm font-semibold"
-                        // Optional: Disabled if the balance is paid, encouraging collection
-                        disabled={isBalanced} 
-                    >
-                        View Full History 🔗
-                    </button>
-                    <button 
-                        // 💡 This now calls the resetForm function in the parent
-                        onClick={onResetAndClose} 
-                        className="bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400 transition text-sm font-semibold"
-                    >
-                        Close
-                    </button>
+                    <div className="mt-6 flex justify-end space-x-3">
+                        <button
+                            onClick={handleViewHistory}
+                            className="bg-indigo-500 text-white py-2 px-4 rounded-lg hover:bg-indigo-600 transition text-sm font-semibold"
+                            // Optional: Disabled if the balance is paid, encouraging collection
+                            disabled={isBalanced}
+                        >
+                            View Full History 🔗
+                        </button>
+                        <button
+                            // 💡 This now calls the resetForm function in the parent
+                            onClick={onResetAndClose}
+                            className="bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400 transition text-sm font-semibold"
+                        >
+                            Close
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
-    );
-};
+        );
+    };
 
 
     return (
         <div className="flex flex-col items-center min-h-screen bg-gray-100 p-6 space-y-6">
-          {showPreviousFeesModal && (
-                <PreviousFeesModal 
-                    data={previousFeesData} 
+            {showPreviousFeesModal && (
+                <PreviousFeesModal
+                    data={previousFeesData}
                     // Pass resetForm to the modal. It handles both closing the modal 
                     // and resetting the form state (searchTerm, selectedStudent, etc.)
-                    onResetAndClose={resetForm} 
+                    onResetAndClose={resetForm}
                 />
             )}
 
@@ -646,6 +659,16 @@ const PreviousFeesModal = ({ data, onResetAndClose }) => {
                         {receiptData.academicYear}
                     </span></p>
                     <p><strong>Class:</strong> <span className="font-bold text-gray-800">{receiptData.class || 'N/A'}</span></p>
+                </div>
+                {/* 🏫 School ID (read-only field) */}
+                <div className="mb-4">
+                    <label className="block mb-2 font-medium text-sm text-gray-700">School ID</label>
+                    <input
+                        type="text"
+                        value={schoolId}
+                        readOnly
+                        className="w-full p-2 border rounded-lg bg-gray-100 text-gray-600"
+                    />
                 </div>
 
                 {/* Student Search Section */}

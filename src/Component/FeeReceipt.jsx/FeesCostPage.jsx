@@ -1,30 +1,29 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { db } from "../../../firebase";
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, orderBy, limit } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, getDocs, limit } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
 import { toast } from "react-toastify";
+import { useLocation } from "react-router-dom";
 
 const FeesCostPage = () => {
+    const location = useLocation();
+    const schoolId = location.state?.schoolId || "N/A"; // fallback if missing
+
     const [feesList, setFeesList] = useState([]);
     const [editingFeeId, setEditingFeeId] = useState(null);
     const [classes, setClasses] = useState([]);
     const [searchClass, setSearchClass] = useState("");
     const [selectedClass, setSelectedClass] = useState(null);
 
-    // **********************************************
-    // 1. Define the password for deletion
-    // NOTE: Replace 'secure123' with a complex password or use environment variables!
-    const DELETION_PASSWORD = "secure123"; 
-    // **********************************************
-
     const initialFeeState = useMemo(() => ({
         feeId: uuidv4().slice(0, 10).toUpperCase(),
         className: "",
-        term1: "", 
-        term2: "", 
-        term3: "", 
-        totalAmount: "", 
+        term1: "",
+        term2: "",
+        term3: "",
+        totalAmount: "",
         academicYear: "",
+        schoolId: schoolId, // ✅ Add this
     }), []);
 
     // Use useCallback for proper memoization and dependency setup
@@ -49,31 +48,42 @@ const FeesCostPage = () => {
     // ... (Fetch FeesCost List and Fetch Classes remains the same)
 
     useEffect(() => {
+        if (!schoolId || schoolId === "N/A") return;
+
         const feesCollectionRef = collection(db, "FeesCost");
-        const q = query(feesCollectionRef, orderBy("className", "asc"), limit(50));
+        const q = query(
+            feesCollectionRef,
+            where("schoolId", "==", schoolId), // ✅ only fetch this school's fees
+         
+            limit(50)
+        );
+
         const unsubscribe = onSnapshot(q, snapshot => {
             setFeesList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
-        return () => unsubscribe();
-    }, []);
 
-    useEffect(() => {
-        if (!searchClass.trim()) {
-            setClasses([]);
-            return;
-        }
-        const classesRef = collection(db, "Classes");
-        const q = query(
-            classesRef, 
-            where("className", ">=", searchClass), 
-            where("className", "<=", searchClass + "\uf8ff"), 
-            limit(10)
-        );
-        const unsubscribe = onSnapshot(q, snapshot => {
-            setClasses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
         return () => unsubscribe();
-    }, [searchClass]);
+    }, [schoolId]);
+
+
+ useEffect(() => {
+    const fetchClasses = async () => {
+        if (!searchClass.trim()) return;
+
+        const classesRef = collection(db, "Classes");
+        const snapshot = await getDocs(classesRef);
+        const filtered = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(cls =>
+                cls.schoolId === schoolId &&
+                cls.className.toLowerCase().includes(searchClass.toLowerCase())
+            );
+        setClasses(filtered.slice(0, 10));
+    };
+
+    fetchClasses();
+}, [searchClass]);
+
 
     const handleClassSelect = (cls) => {
         setSelectedClass(cls);
@@ -94,14 +104,14 @@ const FeesCostPage = () => {
 
     const handleEdit = (fee) => {
         setEditingFeeId(fee.id);
-        
+
         setFeeData({
             ...fee,
             // Convert to string for form inputs, defaulting to "" if null/undefined
             term1: fee.term1?.toString() || "",
             term2: fee.term2?.toString() || "",
             term3: fee.term3?.toString() || "",
-            totalAmount: fee.totalAmount?.toString() || "", 
+            totalAmount: fee.totalAmount?.toString() || "",
         });
         setSelectedClass({ className: fee.className });
         setSearchClass(fee.className);
@@ -109,17 +119,17 @@ const FeesCostPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         const totalAmount = parseFloat(calculatedTotalAmount);
 
         // EXTRA VALIDATION CHECK: Ensure all required fields have some input, not just the calculated total.
-        if (!feeData.className || !feeData.academicYear || 
+        if (!feeData.className || !feeData.academicYear ||
             feeData.term1 === "" || feeData.term2 === "" || feeData.term3 === "" ||
             totalAmount <= 0
         ) {
             return toast.error("Please ensure a Class, Academic Year, and all three Term amounts are filled. Total fee must be greater than zero.");
         }
-        
+
         try {
             // Prepare data for Firestore. term values are converted to actual numbers.
             const feeDataToSave = {
@@ -127,9 +137,10 @@ const FeesCostPage = () => {
                 term1: parseFloat(feeData.term1), // Will be a valid number because of validation
                 term2: parseFloat(feeData.term2), // Will be a valid number because of validation
                 term3: parseFloat(feeData.term3), // Will be a valid number because of validation
-                totalAmount: totalAmount, 
+                totalAmount: totalAmount,
+                schoolId: schoolId, // ✅ ensure schoolId is saved
             };
-            
+
             // Remove the ID field for a clean add/update operation
             delete feeDataToSave.id;
 
@@ -140,7 +151,7 @@ const FeesCostPage = () => {
                 await addDoc(collection(db, "FeesCost"), feeDataToSave);
                 toast.success("Fee added successfully!");
             }
-            
+
             // Reset form
             resetForm();
         } catch (err) {
@@ -149,32 +160,12 @@ const FeesCostPage = () => {
         }
     };
 
-    // *****************************************************************
-    // 2. UPDATED handleDelete function to include password check
-    // *****************************************************************
-    const handleDelete = async (id, className) => {
-        // Step 1: Confirm intent
-        if (!window.confirm(`Are you sure you want to delete the fee structure for ${className}?`)) {
-            return;
-        }
-
-        // Step 2: Prompt for password
-        const password = window.prompt("Please enter the deletion password to confirm:");
-
-        // Step 3: Check password
-        if (password === DELETION_PASSWORD) {
-            try {
-                await deleteDoc(doc(db, "FeesCost", id));
-                toast.success("Fee deleted successfully!");
-            } catch (error) {
-                console.error("Error deleting document:", error);
-                toast.error("Failed to delete fee. See console for details.");
-            }
-        } else {
-            toast.error("Incorrect password. Deletion cancelled.");
+    const handleDelete = async (id) => {
+        if (window.confirm("Are you sure you want to delete this fee?")) {
+            await deleteDoc(doc(db, "FeesCost", id));
+            toast.success("Fee deleted successfully!");
         }
     };
-    // *****************************************************************
 
 
     return (
@@ -183,6 +174,16 @@ const FeesCostPage = () => {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-lg mb-6 max-w-xl">
+                {/* 🏫 School ID (read-only field) */}
+                <div className="mb-4">
+                    <label className="block mb-2 font-medium text-sm text-gray-700">School ID</label>
+                    <input
+                        type="text"
+                        value={schoolId}
+                        readOnly
+                        className="w-full p-2 border rounded-lg bg-gray-100 text-gray-600"
+                    />
+                </div>
                 {/* ... (Class Name Input remains the same) ... */}
                 <div className="mb-4">
                     <label className="block mb-1 font-medium text-sm">Class Name</label>
@@ -280,6 +281,7 @@ const FeesCostPage = () => {
             </form>
 
             {/* Fees Table */}
+            {/* ... (Table display remains the same) ... */}
             <div className="bg-white p-6 rounded-xl shadow-lg max-w-full overflow-x-auto">
                 <h3 className="text-lg font-bold mb-4">Existing Fees</h3>
                 <table className="min-w-full divide-y divide-gray-200">
@@ -305,14 +307,7 @@ const FeesCostPage = () => {
                                 <td className="px-3 py-2 text-sm text-gray-700">{fee.academicYear}</td>
                                 <td className="px-3 py-2 text-sm text-gray-700 space-x-2">
                                     <button type="button" onClick={() => handleEdit(fee)} className="text-orange-600 hover:text-orange-800">Edit</button>
-                                    {/* UPDATED: Pass className for better confirmation message */}
-                                    <button 
-                                        type="button" 
-                                        onClick={() => handleDelete(fee.id, fee.className)} 
-                                        className="text-red-600 hover:text-red-800"
-                                    >
-                                        Delete
-                                    </button>
+                                    <button type="button" onClick={() => handleDelete(fee.id)} className="text-red-600 hover:text-red-800">Delete</button>
                                 </td>
                             </tr>
                         ))}
