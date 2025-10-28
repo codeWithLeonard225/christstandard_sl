@@ -33,6 +33,7 @@ import GradeSheetPage from "../TeacherAssignment/GradeSheetPage";
 import GeneralReportCard from "../PupilsPage/GeneralReportCard";
 import Dashboard from "../Dashboard/Dashboard"
 import RegDashboard from "../Dashboard/RegDashboard"
+import StudentFilterPage from "../Voters/StudentFilterPage";
 
 
 // --- Navigation Items ---
@@ -44,6 +45,7 @@ const NAV_ITEMS = [
     children: [
       { key: "Form", label: " Pupils", icon: <MdPerson /> },
       { key: "class", label: " Class", icon: <MdPerson /> },
+      { key: "classList", label: "Class List", icon: <MdPerson /> },
     ],
   },
   {
@@ -55,7 +57,7 @@ const NAV_ITEMS = [
       { key: "feesCost", label: " feesUpdate", icon: <MdPerson /> },
     ],
   },
- {
+  {
     key: "Staff",
     label: "staff",
     icon: <MdBarChart />,
@@ -142,18 +144,19 @@ function AdminPanel() {
       </div>
     ));
 
-   const renderContent = () => {
+  const renderContent = () => {
     switch (activeTab) {
       case "dashboard": return <RegDashboard />;
       case "Form": return <Registration />;
       case "class": return <ClassRegistration />;
+      case "classList": return <StudentFilterPage />;
       case "fees": return <FeeReceipt />;
       case "feesCost": return <FeesCostPage />;
       case "TeacherRegistration": return <TeacherRegistration />;
       case "subjects": return <SubjectPage />;
       case "TeacherAssignment": return <TeacherAssignmentPage />;
       case "TeacherPupilsPage": return <TeacherPupilsPage />;
-         case "SubGradeMatrixPage": return <SubGradeMatrixPage />;
+      case "SubGradeMatrixPage": return <SubGradeMatrixPage />;
       case "ClassFullTermMatrixPage": return <ClassFullTermMatrixPage />;
       case "GradeSheetPage": return <GradeSheetPage />;
       case "GeneralReportCard": return <GeneralReportCard />;

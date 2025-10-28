@@ -29,6 +29,7 @@ import TeacherRegistration from "../Voters/TeacherRegistration";
 import TeacherPupilsPage from "../TeacherAssignment/TeacherPupilsPage";
 import GradeSheetPage from "../TeacherAssignment/GradeSheetPage";
 import GeneralReportCard from "../PupilsPage/GeneralReportCard";
+import StudentFilterPage from "../Voters/StudentFilterPage";
 
 
 // --- Navigation Items ---
@@ -41,6 +42,7 @@ const NAV_ITEMS = [
     children: [
       { key: "fees", label: " PupilsFees", icon: <MdPerson /> },
       { key: "feesCost", label: " feesUpdate", icon: <MdPerson /> },
+      { key: "classList", label: "Class List", icon: <MdPerson /> },
     ],
   },
   {
@@ -48,9 +50,9 @@ const NAV_ITEMS = [
     label: "Pupils Result",
     icon: <MdBarChart />,
     children: [
-    { key: "GradeSheetPage", label: "Grade Sheet", icon: <MdPerson /> },
-    { key: "GeneralReportCard", label: "ReportCard", icon: <MdPerson /> },
-     
+      { key: "GradeSheetPage", label: "Grade Sheet", icon: <MdPerson /> },
+      { key: "GeneralReportCard", label: "ReportCard", icon: <MdPerson /> },
+
     ],
   },
 ];
@@ -120,11 +122,12 @@ function FeesPanel() {
       </div>
     ));
 
-   const renderContent = () => {
+  const renderContent = () => {
     switch (activeTab) {
       case "dashboard": return <FeesDashboard />;
       case "Form": return <Registration />;
       case "class": return <ClassRegistration />;
+      case "classList": return <StudentFilterPage />;
       case "fees": return <FeeReceipt />;
       case "feesCost": return <FeesCostPage />;
       case "TeacherRegistration": return <TeacherRegistration />;

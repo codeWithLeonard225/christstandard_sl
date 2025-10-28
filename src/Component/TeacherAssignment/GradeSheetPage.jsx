@@ -8,13 +8,14 @@ import {
     query,
     where,
     getDocs,
-    // ⭐️ NEW IMPORTS
+    // ⭐️ NEW IMPORTS for Edit/Delete
     updateDoc, 
     deleteDoc, 
     doc,
 } from "firebase/firestore";
 import { useLocation } from "react-router-dom";
-import { toast } from "react-toastify"; // Assuming you use react-toastify for feedback
+// Assuming you have 'react-toastify' installed for user feedback
+import { toast } from "react-toastify"; 
 
 const GradeSheetPage = () => {
     const location = useLocation();
@@ -31,12 +32,12 @@ const GradeSheetPage = () => {
     const [classesCache, setClassesCache] = useState([]);
     
     // ⭐️ NEW STATE for tracking temporary edits
+    // Format: { 'pupilID-subjectName': { value: newGrade, gradeDocId: firestoreId } }
     const [editingGrades, setEditingGrades] = useState({});
 
     const tests = ["Term 1 T1", "Term 1 T2", "Term 2 T1", "Term 2 T2", "Term 3 T1", "Term 3 T2"];
     const MAX_SCORE_PER_SUBJECT = 100;
 
-    // ... (Existing useEffects for fetching Cache, Years/Classes, and Pupils remain unchanged) ...
     // 🔹 Fetch Classes Cache (for subjectPercentage)
     useEffect(() => {
         if (!schoolId) return;
@@ -65,8 +66,8 @@ const GradeSheetPage = () => {
         });
 
         return () => unsub();
-    }, [schoolId]);
-    
+    }, [schoolId, academicYear, selectedClass]);
+
     // 🔹 Fetch pupils
     useEffect(() => {
         if (!selectedClass || !academicYear || !schoolId) return;
@@ -81,7 +82,7 @@ const GradeSheetPage = () => {
         const unsub = onSnapshot(pupilsQuery, (snapshot) => {
             const data = snapshot.docs
                 .map((doc) => ({ id: doc.id, ...doc.data(), studentID: doc.data().studentID }))
-                .sort((a, b) => a.studentName.localeCompare(b.studentName));
+                .sort((a, b) => a.studentName.localeCompare(b.studentName)); 
             setPupils(data);
         });
 
@@ -90,7 +91,7 @@ const GradeSheetPage = () => {
 
 
     // 🔹 Fetch grades (MODIFIED to include doc.id)
-    useEffect(() => {
+    const fetchGrades = React.useCallback(async () => {
         if (!selectedClass || !selectedTest || !academicYear || !schoolId) return;
 
         setLoading(true);
@@ -105,21 +106,22 @@ const GradeSheetPage = () => {
             where("test", "==", selectedTest)
         );
 
-        const fetchGrades = async () => {
-            const snapshot = await getDocs(gradesQuery);
-            // ⭐️ Store the Firestore Document ID (gradeDocId) for updates/deletes
-            const data = snapshot.docs.map(doc => ({ 
-                gradeDocId: doc.id, 
-                ...doc.data() 
-            }));
-            setGradesData(data);
-            setLoading(false);
-        };
-
-        fetchGrades();
+        const snapshot = await getDocs(gradesQuery);
+        // ⭐️ Store the Firestore Document ID (gradeDocId) for updates/deletes
+        const data = snapshot.docs.map(doc => ({ 
+            gradeDocId: doc.id, 
+            ...doc.data() 
+        }));
+        setGradesData(data);
+        setLoading(false);
     }, [selectedClass, selectedTest, academicYear, schoolId]);
+    
+    useEffect(() => {
+        fetchGrades();
+    }, [fetchGrades]);
 
-    // 🔹 Calculate subjects, grades, totals, percentages, and ranks (UNCHANGED)
+
+    // 🔹 Calculate subjects, grades, totals, percentages, and ranks (MODIFIED for gradeDocMap)
     const { subjects, pupilGradesMap, pupilTotals, gradeDocMap } = React.useMemo(() => {
         if (!gradesData.length || !pupils.length) return { subjects: [], pupilGradesMap: {}, pupilTotals: {}, gradeDocMap: {} };
 
@@ -143,7 +145,8 @@ const GradeSheetPage = () => {
         const perf = pupils.map(pupil => {
             let total = 0;
             uniqueSubjects.forEach(sub => {
-                const grade = gradesMap[sub]?.[pupil.studentID];
+                // Use the fetched grade for total calculation
+                const grade = gradesMap[sub]?.[pupil.studentID]; 
                 if (grade != null) total += grade;
             });
             const percentage = totalSubjectPercentage > 0 ? (total / totalSubjectPercentage) * 100 : 0;
@@ -194,28 +197,15 @@ const GradeSheetPage = () => {
             const gradeRef = doc(db, "PupilGrades", editedGrade.gradeDocId);
             await updateDoc(gradeRef, { grade: newGradeValue });
             
-            // Remove the grade from the temporary edits and force a re-fetch of grades
+            // Remove the grade from the temporary edits
             setEditingGrades(prev => {
                 const newState = { ...prev };
                 delete newState[editKey];
                 return newState;
             });
             
-            // ⚠️ Force a manual re-fetch of grades to update the UI correctly
-            // This is a crude way, but necessary when using getDocs in the useEffect.
-            const gradesQuery = query(
-                collection(db, "PupilGrades"),
-                where("schoolId", "==", schoolId),
-                where("academicYear", "==", academicYear),
-                where("className", "==", selectedClass),
-                where("test", "==", selectedTest)
-            );
-            const snapshot = await getDocs(gradesQuery);
-            const updatedData = snapshot.docs.map(d => ({ 
-                gradeDocId: d.id, 
-                ...d.data() 
-            }));
-            setGradesData(updatedData);
+            // Re-fetch grades to update the table calculations
+            await fetchGrades();
             
             toast.success(`✅ Grade for ${pupilID} in ${subject} updated to ${newGradeValue}.`);
 
@@ -247,20 +237,8 @@ const GradeSheetPage = () => {
                 return newState;
             });
 
-            // ⚠️ Force a manual re-fetch of grades to update the UI correctly
-            const gradesQuery = query(
-                collection(db, "PupilGrades"),
-                where("schoolId", "==", schoolId),
-                where("academicYear", "==", academicYear),
-                where("className", "==", selectedClass),
-                where("test", "==", selectedTest)
-            );
-            const snapshot = await getDocs(gradesQuery);
-            const updatedData = snapshot.docs.map(d => ({ 
-                gradeDocId: d.id, 
-                ...d.data() 
-            }));
-            setGradesData(updatedData);
+            // Re-fetch grades to update the table calculations
+            await fetchGrades();
 
             toast.warn(`🗑️ Grade for ${pupilID} in ${subject} deleted.`);
             
@@ -278,19 +256,45 @@ const GradeSheetPage = () => {
     };
 
 
-    // 🔹 Helper for grade colors (UNCHANGED)
+    // 🔹 Helper for grade colors
     const getGradeColor = (grade) => {
-        if (grade == null) return "text-gray-400";
-        if (grade >= 50) return "text-blue-600 font-bold";
+        if (grade == null || grade === "") return "text-gray-400";
+        // Convert to number for comparison if it's a string from input
+        const numericGrade = parseFloat(grade);
+        if (numericGrade >= 50) return "text-blue-600 font-bold";
         return "text-red-600 font-bold";
     };
 
-    // 🔹 Print Preview (UNCHANGED)
+    // 🔹 Print Preview
     const handlePrint = () => window.print();
 
-    // 🔹 Download PDF (UNCHANGED)
+    // 🔹 Download PDF
     const handleDownloadPDF = () => {
-        // ... (PDF logic remains the same, using pupilGradesMap for final values) ...
+        const doc = new jsPDF({ orientation: "landscape" });
+        doc.setFontSize(14);
+        doc.text(`Grade Sheet - ${selectedClass} (${academicYear}) - ${selectedTest}`, 14, 15);
+
+        const tableHeaders = ["Subject", ...pupils.map(p => p.studentName)];
+        const tableRows = subjects.map(sub => [
+            sub,
+            // Note: This uses the original fetched grades (pupilGradesMap), not the unsaved edits
+            ...pupils.map(p => pupilGradesMap[sub]?.[p.studentID] ?? "—") 
+        ]);
+
+        tableRows.push(["Total Sum", ...pupils.map(p => pupilTotals[p.studentID]?.totalSum ?? "—")]);
+        tableRows.push(["Percentage (%)", ...pupils.map(p => pupilTotals[p.studentID]?.percentage ?? "—")]);
+        tableRows.push(["Rank", ...pupils.map(p => pupilTotals[p.studentID]?.rank ?? "—")]);
+
+        autoTable(doc, {
+            head: [tableHeaders],
+            body: tableRows,
+            startY: 25,
+            theme: "grid",
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [63, 81, 181] },
+        });
+
+        doc.save(`GradeSheet_${selectedClass}_${selectedTest}.pdf`);
     };
 
     return (
@@ -314,10 +318,9 @@ const GradeSheetPage = () => {
                     📄 Download PDF
                 </button>
             </div>
-
-            {/* Filter Section (UNCHANGED) */}
+            
+            {/* Filter Section */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 p-4 border rounded-lg bg-indigo-50 no-print">
-                {/* ... (Filter dropdowns remain here) ... */}
                 <div>
                     <label className="font-semibold text-gray-700 block mb-1">Academic Year:</label>
                     <select
@@ -360,7 +363,6 @@ const GradeSheetPage = () => {
                         <thead className="bg-indigo-600 text-white sticky top-0">
                             <tr>
                                 <th className="px-4 py-3 text-left border-r">Subject</th>
-                                {/* ⭐️ ADD Extra column for actions */}
                                 {pupils.map((p) => (
                                     <th key={p.studentID} className="px-4 py-3 text-center border-r">
                                         {p.studentName}
@@ -374,10 +376,11 @@ const GradeSheetPage = () => {
                                     <td className="px-4 py-3 font-semibold border-r">{sub}</td>
                                     {pupils.map((p) => {
                                         const pupilID = p.studentID;
-                                        const gradeDocId = gradeDocMap[sub]?.[pupilID] ?? "";
+                                        // Use gradeDocMap to retrieve the document ID for actions
+                                        const gradeDocId = gradeDocMap[sub]?.[pupilID] ?? ""; 
                                         const currentValue = getCurrentGradeValue(pupilID, sub);
                                         const isBeingEdited = editingGrades[`${pupilID}-${sub}`];
-                                        const hasGrade = pupilGradesMap[sub]?.[pupilID] != null;
+                                        const hasGrade = gradeDocId !== "";
                                         
                                         return (
                                             <td key={pupilID} className="px-2 py-1 border-r">
@@ -391,11 +394,11 @@ const GradeSheetPage = () => {
                                                         onChange={(e) => 
                                                             handleGradeInputChange(pupilID, sub, gradeDocId, e.target.value)
                                                         }
-                                                        className={`w-16 px-1 py-1 text-center border rounded-md text-sm ${getGradeColor(currentValue)} ${isBeingEdited ? 'border-orange-500' : 'border-gray-300'}`}
+                                                        className={`w-16 px-1 py-1 text-center border rounded-md text-sm ${getGradeColor(currentValue)} ${isBeingEdited ? 'border-orange-500 ring-2 ring-orange-500' : 'border-gray-300'}`}
                                                         placeholder="—"
                                                     />
 
-                                                    {/* ⭐️ Save Button (Shows only if editing) */}
+                                                    {/* ⭐️ Save Button (Shows only if actively editing) */}
                                                     {isBeingEdited && (
                                                         <button
                                                             onClick={() => handleSaveGrade(pupilID, sub, gradeDocId)}
@@ -406,7 +409,7 @@ const GradeSheetPage = () => {
                                                         </button>
                                                     )}
 
-                                                    {/* ⭐️ Delete Button (Shows only if a grade exists and isn't being edited) */}
+                                                    {/* ⭐️ Delete Button (Shows only if a grade exists and is not currently being edited) */}
                                                     {hasGrade && !isBeingEdited && (
                                                         <button
                                                             onClick={() => handleDeleteGrade(pupilID, sub, gradeDocId)}
@@ -422,7 +425,6 @@ const GradeSheetPage = () => {
                                     })}
                                 </tr>
                             ))}
-                            {/* ... (Total Sum, Percentage, Rank rows remain unchanged) ... */}
                             <tr className="bg-gray-100 font-bold">
                                 <td className="px-4 py-3 border-r">Total Sum</td>
                                 {pupils.map((p) => <td key={p.studentID} className="px-4 py-3 text-center">{pupilTotals[p.studentID]?.totalSum ?? "—"}</td>)}
