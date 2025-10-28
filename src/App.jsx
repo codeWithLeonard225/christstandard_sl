@@ -15,6 +15,7 @@ import Gallery from "./Component/Web/Pages/Gallery";
 import ContactUsPage from "./Component/Web/Pages/ContactUsPage";
 import Developer from "./Component/Dashboard/Developer";
 import PupilUpdate from "./Component/TeacherAssignment/PupilUpdate";
+import PrivatePupilsDashboard from "./Component/PupilsPage/PrivatePupilsDashboard";
 
 function App() {
   return (
@@ -28,11 +29,11 @@ function App() {
           <Route path="/gallery" element={<Gallery />} />
            <Route path="/contact" element={<ContactUsPage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/PupilsDashboard"
+           <Route
+            path="/PrivatePupilsDashboard"
             element={
               <ProtectedRoute role="pupil">
-                <PupilsDashboard />
+                <PrivatePupilsDashboard />
               </ProtectedRoute>
             }
           />
