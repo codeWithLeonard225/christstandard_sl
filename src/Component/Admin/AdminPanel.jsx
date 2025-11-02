@@ -34,7 +34,8 @@ import GeneralReportCard from "../PupilsPage/GeneralReportCard";
 import Dashboard from "../Dashboard/Dashboard"
 import RegDashboard from "../Dashboard/RegDashboard"
 import StudentFilterPage from "../Voters/StudentFilterPage";
-
+import NationalResultPage from "../CeoPanel/NationalResultPage";
+import BECEStatementOfResult from "../CeoPanel/BECEStatementOfResult";
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
@@ -79,6 +80,17 @@ const NAV_ITEMS = [
       { key: "ClassFullTermMatrixPage", label: "Term Grade Sheet", icon: <MdPerson /> },
       { key: "GeneralReportCard", label: "ReportCard", icon: <MdPerson /> },
       // { key: "Testing", label: "Testing", icon: <MdPerson /> },
+
+    ],
+  },
+  {
+    key: "NationalResults",
+    label: "National Results",
+    icon: <MdBarChart />,
+    children: [
+      { key: "beceResult", label: "Bece Result Entering", icon: <MdPerson /> },
+      { key: "beceReport", label: "Bece Result Report", icon: <MdPerson /> },
+     
 
     ],
   },
@@ -159,6 +171,8 @@ function AdminPanel() {
       case "SubGradeMatrixPage": return <SubGradeMatrixPage />;
       case "ClassFullTermMatrixPage": return <ClassFullTermMatrixPage />;
       case "GradeSheetPage": return <GradeSheetPage />;
+      case "beceResult": return <NationalResultPage />;
+      case "beceReport": return <BECEStatementOfResult />;
       case "GeneralReportCard": return <GeneralReportCard />;
 
       default: return <Placeholder title={activeTab} />;
