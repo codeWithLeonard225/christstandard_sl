@@ -335,15 +335,20 @@ const BECEStatementOfResult = () => {
         doc.setFontSize(10).setFont('helvetica', 'bold');
         doc.text(`NUMBER OF PASSES: ${data.numPasses || '………………………..'}`, marginX, y);
         doc.text(`AGGREGATE: ${data.aggregate || '……………………..'}`, pageWidth - marginX, y, null, null, "right");
-        y += 15;
+        y += 10;
 
         // Signature and Date on the same line
         doc.setFont('helvetica', 'normal');
         const signatureX = marginX;
         const dateX = pageWidth - marginX - 70;
         doc.text("Signature of Principal/Head Teacher: _________________________", signatureX, y);
-        doc.text("Date of Issue: _________________________             ", dateX, y); // Added spaces to align right margin
+        doc.text("Date of Issue: _________________________             ", dateX, y); y += 10; // Added spaces to align right margin
 
+        doc.setFontSize(9).setFont('helvetica', 'bold'); // Make it slightly smaller and bold for emphasis
+        doc.setTextColor(200, 0, 0); // Red text for attention
+        doc.text("Any Alteration will render this Certificate Invalid", pageWidth - marginX, y, null, null, "right");
+        doc.setTextColor(0, 0, 0); // Reset color to black
+        y += 10;
         // -----------------------------------------------------------
         // 🌟 Draw the Unique Border Last
         // -----------------------------------------------------------
@@ -393,12 +398,12 @@ const BECEStatementOfResult = () => {
                         >
                             📄 Download PDF (A4)
                         </button>
-                        <button
+                        {/* <button
                             onClick={handlePrint}
                             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold shadow"
                         >
                             🖨️ Print
-                        </button>
+                        </button> */}
                     </div>
 
                     {/* ⭐️ WATERMARK (Faded Logo) - Uses JSX for browser view */}
