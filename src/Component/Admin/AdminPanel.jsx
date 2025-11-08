@@ -36,6 +36,8 @@ import RegDashboard from "../Dashboard/RegDashboard"
 import StudentFilterPage from "../Voters/StudentFilterPage";
 import NationalResultPage from "../CeoPanel/NationalResultPage";
 import BECEStatementOfResult from "../CeoPanel/BECEStatementOfResult";
+import TeacherGradesPage from "../TeacherAssignment/TeacherPupilsPageAdmin";
+import TeacherAssignmentReport from "../TeacherAssignment/TeacherAssignmentReport";
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
@@ -66,6 +68,7 @@ const NAV_ITEMS = [
       { key: "TeacherRegistration", label: "Teacher Regis", icon: <MdPerson /> },
       { key: "subjects", label: "Subjects", icon: <MdPerson /> },
       { key: "TeacherAssignment", label: "Teacher Assignment", icon: <MdPerson /> },
+       { key: "TeacherAssignmentReport", label: "Teacher Assignment Report ", icon: <MdPerson /> },
 
 
     ],
@@ -79,6 +82,7 @@ const NAV_ITEMS = [
       { key: "SubGradeMatrixPage", label: "Sub Grade Sheet", icon: <MdPerson /> },
       { key: "ClassFullTermMatrixPage", label: "Term Grade Sheet", icon: <MdPerson /> },
       { key: "GeneralReportCard", label: "ReportCard", icon: <MdPerson /> },
+        { key: "TeacherPupilsPageAdmin", label: "TeacherPupilsGrade", icon: <MdPerson /> },
       // { key: "Testing", label: "Testing", icon: <MdPerson /> },
 
     ],
@@ -174,6 +178,8 @@ function AdminPanel() {
       case "beceResult": return <NationalResultPage />;
       case "beceReport": return <BECEStatementOfResult />;
       case "GeneralReportCard": return <GeneralReportCard />;
+         case "TeacherPupilsPageAdmin": return <TeacherGradesPage />;
+          case "TeacherAssignmentReport": return <TeacherAssignmentReport />;
 
       default: return <Placeholder title={activeTab} />;
     }
