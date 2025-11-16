@@ -14,13 +14,14 @@ import {
     where
 } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
-import { useLocation } from "react-router-dom";
+// ⭐ ADDED useNavigate ⭐
+import { useLocation, useNavigate } from "react-router-dom";
 // 🚨 IMPORTANT: Make sure you import your custom useAuth hook
 import { useAuth } from "../Security/AuthContext";
 
 // Cloudinary config
-const CLOUD_NAME = "doucdnzij"; // Cloudinary Cloud Name
-const UPLOAD_PRESET = "Nardone"; // Cloudinary Upload Preset
+const CLOUD_NAME = "dxcrlpike"; // Cloudinary Cloud Name
+const UPLOAD_PRESET = "LeoTechSl Projects"; // Cloudinary Upload Preset
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 // Define your admin password. For a real app, this should be in an environment variable.
@@ -42,10 +43,12 @@ const calculateAge = (dob) => {
 
 const Registration = () => {
     const location = useLocation();
+    // ⭐ INITIALIZE useNavigate ⭐
+    const navigate = useNavigate();
     // 1. Get user and auth state from context
     const { user } = useAuth();
 
-    // ✅ CONSOLIDATED SCHOOL ID LOGIC: 
+    // ✅ CONSOLIDATED SCHOOL ID LOGIC:
     // Prioritize ID from route state, then fall back to the authenticated user's ID.
     const currentSchoolId = location.state?.schoolId || user?.schoolId || "N/A";
 
@@ -80,7 +83,6 @@ const Registration = () => {
     const [users, setUsers] = useState([]);
     const [originalAcademicInfo, setOriginalAcademicInfo] = useState(null);
     const [classOptions, setClassOptions] = useState([]);
-    
     // ⭐ NEW STATE 1: To hold the fetched pupil access types
     const [accessTypeOptions, setAccessTypeOptions] = useState([]);
     // ⭐ NEW STATE 2: To prevent re-setting the default type
@@ -94,7 +96,7 @@ const Registration = () => {
         setFormData(prev => ({
             ...prev,
             schoolId: idToUse,
-            // Auto-fill the registeredBy field 
+            // Auto-fill the registeredBy field
             registeredBy: user?.data?.adminID || user?.data?.teacherID || ""
         }));
 
@@ -165,56 +167,82 @@ const Registration = () => {
         return () => unsubscribe();
     }, [currentSchoolId]);
 
-    
-    // ⭐ NEW EFFECT 4: Fetch Pupil Access Types based on schoolId
-    // ⭐ REVISED EFFECT 4: Fetch Pupil Access Types based on schoolId and set default
-    useEffect(() => {
-        if (!currentSchoolId || currentSchoolId === "N/A") {
-            setAccessTypeOptions([]);
-            return;
-        }
+    // ✅ EFFECT 4: Fetch pupil access types
+    useEffect(() => {
+        if (!currentSchoolId || currentSchoolId === "N/A") {
+            setAccessTypeOptions([]);
+            return;
+        }
 
-        const accessTypesRef = collection(db, "SchoolAccess"); // Using your specified collection name
-        const q = query(accessTypesRef, where("schoolId", "==", currentSchoolId));
+        const accessTypesRef = collection(db, "SchoolAccess"); // Using your specified collection name
+        const q = query(accessTypesRef, where("schoolId", "==", currentSchoolId));
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            // ✅ CORRECTION: Use flatMap to extract and flatten the 'accessType' array from documents
-            const options = snapshot.docs
-                .flatMap(doc => doc.data().accessType || []) 
-                .filter(Boolean)
-                .sort((a, b) => a.localeCompare(b));
-            
-            setAccessTypeOptions(options);
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            // ✅ CORRECTION: Use flatMap to extract and flatten the 'accessType' array from documents
+            const options = snapshot.docs
+                .flatMap(doc => doc.data().accessType || [])
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b));
 
-            // ⭐ DEFAULT LOGIC: Set the first fetched access type (index 0) as default
-            // only if we are registering a new student (no formData.id), options are available, 
-            // and the default hasn't been set yet.
-            if (!formData.id && options.length > 0 && formData.pupilType === "" && !hasSetDefaultType) {
-                setFormData(prev => ({ 
-                    ...prev, 
-                    // Sets the default to the element at the 0 index
-                    pupilType: options[0] 
-                }));
-                setHasSetDefaultType(true); // Mark as set
-            }
-        }, (error) => {
-            console.error("Firestore 'SchoolAccess' onSnapshot failed:", error);
-            toast.error("Failed to fetch pupil access types.");
-        });
+            setAccessTypeOptions(options);
+            if (!formData.id && options.length > 0 && formData.pupilType === "" && !hasSetDefaultType) {
+                setFormData(prev => ({
+                    ...prev,
+                    // Sets the default to the element at the 0 index
+                    pupilType: options[0]
+                }));
+                setHasSetDefaultType(true); // Mark as set
+            }
+        }, (error) => {
+            console.error("Firestore 'SchoolAccess' onSnapshot failed:", error);
+            toast.error("Failed to fetch pupil access types.");
+        });
 
-        return () => unsubscribe();
-    // Re-evaluate if currentSchoolId changes, or if we transition from update (formData.id) to register
-    }, [currentSchoolId, formData.id, formData.pupilType, hasSetDefaultType]);
+        return () => unsubscribe();
+        // Re-evaluate if currentSchoolId changes, or if we transition from update (formData.id) to register
+    }, [currentSchoolId, formData.id, formData.pupilType, hasSetDefaultType]);
 
-    
-    // 🔎 FILTER LOGIC: Simplified, as 'users' is already school-filtered
-    // 🔎 FILTER & SORT LOGIC
+
+    // --- New State for Filtering ---
+    const TODAY_DATE = useMemo(() => new Date().toISOString().slice(0, 10), []);
+    const [currentFilter, setCurrentFilter] = useState({
+        date: TODAY_DATE,
+        class: "All"
+    });
+
+    const handleDateFilterChange = (date) => {
+        setCurrentFilter(prev => ({ ...prev, date }));
+    };
+
+    const handleClassFilterChange = (className) => {
+        setCurrentFilter(prev => ({ ...prev, class: className }));
+    };
+
+    const handleResetFilters = () => {
+        setSearchTerm("");
+        setCurrentFilter({
+            date: TODAY_DATE, // Reset to today
+            class: "All"
+        });
+        toast.info("Filters reset to show today's registrations.");
+    };
+    // 🔎 FILTER & SORT LOGIC: Updated to use currentFilter state
     const filteredUsers = useMemo(() => {
         let filtered = users;
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
 
-        if (searchTerm.trim() !== "") {
-            const lowerCaseSearchTerm = searchTerm.toLowerCase();
-            filtered = users.filter(user => {
+        // 1. Filter by Date (Default Filter)
+        if (currentFilter.date !== "All") {
+            filtered = filtered.filter(user => user.registrationDate === currentFilter.date);
+        }
+
+        // 2. Filter by Class
+        if (currentFilter.class !== "All") {
+            filtered = filtered.filter(user => user.class === currentFilter.class);
+        }
+        // 3. Filter by Search Term
+        if (lowerCaseSearchTerm.trim() !== "") {
+            filtered = filtered.filter(user => {
                 return (
                     (user.studentName && user.studentName.toLowerCase().includes(lowerCaseSearchTerm)) ||
                     (user.class && user.class.toLowerCase().includes(lowerCaseSearchTerm)) ||
@@ -225,16 +253,16 @@ const Registration = () => {
             });
         }
 
-        // Sort by studentName ASC
+        // 4. Sort by studentName ASC
         return filtered.sort((a, b) => {
             if (!a.studentName) return 1;
             if (!b.studentName) return -1;
             return a.studentName.localeCompare(b.studentName);
         });
-    }, [users, searchTerm]);
+    }, [users, searchTerm, currentFilter]); // Depend on currentFilter
 
 
-    // ... (rest of helper functions: generateUniqueId, handleInputChange, etc.)
+    // --- Helper Functions ---
 
     const generateUniqueId = () => {
         let newId;
@@ -300,7 +328,7 @@ const Registration = () => {
             const formDataObj = new FormData();
             formDataObj.append("file", blob);
             formDataObj.append("upload_preset", UPLOAD_PRESET);
-            formDataObj.append("folder", "ChristStandard_Photos");
+            formDataObj.append("folder", "SchoolAppPupils/Uploads");
 
             xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`);
             xhr.send(formDataObj);
@@ -384,7 +412,7 @@ const Registration = () => {
                 class: "",
                 academicYear: "",
                 // Set pupilType to the first available option, or empty if none are fetched
-              pupilType: accessTypeOptions.length > 0 ? accessTypeOptions[0] : "",
+                pupilType: accessTypeOptions.length > 0 ? accessTypeOptions[0] : "",
                 registrationDate: new Date().toISOString().slice(0, 10),
                 registeredBy: user?.data?.adminID || user?.data?.teacherID || "",
                 userPhoto: null,
@@ -392,10 +420,9 @@ const Registration = () => {
                 schoolId: currentSchoolId, // Use the current consolidated schoolId
             });
             // Reset state that controls the default setting
-            setHasSetDefaultType(false); 
+            setHasSetDefaultType(false);
             // Clear original academic info state on form reset
             setOriginalAcademicInfo(null);
-        
         } catch (err) {
             console.error(err);
             toast.error(`Failed to ${formData.id ? "update" : "register"} student.`);
@@ -410,10 +437,8 @@ const Registration = () => {
             class: user.class,
             academicYear: user.academicYear,
         });
-        
         // Reset default type flag when updating an existing record
         setHasSetDefaultType(true);
-        
 
         setFormData({
             id: user.id,
@@ -454,7 +479,17 @@ const Registration = () => {
             toast.error("Incorrect password.");
         }
     };
+    
+    // ⭐ NEW FUNCTION: Handle Navigation for Print Form ⭐
+    const handlePrint = (user) => {
+        // Navigate to the print route, passing all student data in the state
+        navigate(`/print-student/${user.studentID}`, { state: { studentData: user } });
+        toast.info(`Preparing print view for ${user.studentName}...`);
+    };
 
+
+
+    // --- RENDER BLOCK ---
     return (
         <div className="flex flex-col items-center min-h-screen bg-gray-100 p-6 space-y-6">
             <form onSubmit={handleSubmit} className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-2xl">
@@ -462,16 +497,6 @@ const Registration = () => {
 
                 {/* --- STUDENT CORE INFO --- */}
                 <h3 className="text-lg font-semibold mt-4 mb-2">Student Core Information</h3>
-                 {/* 🏫 School ID (read-only field) */}
-        {/* <div className="mb-4">
-          <label className="block mb-2 font-medium text-sm text-gray-700">School ID</label>
-          <input
-            type="text"
-            value={schoolId}
-            readOnly
-            className="w-full p-2 border rounded-lg bg-gray-100 text-gray-600"
-          />
-        </div> */}
 
                 <div className="flex flex-col md:flex-row md:space-x-4">
                     <div className="flex-1">
@@ -537,7 +562,7 @@ const Registration = () => {
                 <h3 className="text-lg font-semibold mt-4 mb-2 border-t pt-4">Residential Address</h3>
                 <div className="flex flex-col md:flex-row md:space-x-4">
                     <div className="flex-1">
-                        <label className="block mb-2 font-medium text-sm">Address Line 1</label>
+                        <label className="block mb-2 font-medium text-sm">Pupil Address</label>
                         <input
                             type="text"
                             name="addressLine1"
@@ -548,7 +573,7 @@ const Registration = () => {
                         />
                     </div>
                     <div className="flex-1">
-                        <label className="block mb-2 font-medium text-sm">Address Line 2 (Optional)</label>
+                        <label className="block mb-2 font-medium text-sm">Parent address</label>
                         <input
                             type="text"
                             name="addressLine2"
@@ -652,11 +677,6 @@ const Registration = () => {
                                 </option>
                             ))}
                         </select>
-                        {/* // 🛑 Original hardcoded options removed:
-                            <option value="Boarder">Boarder</option>
-                            <option value="Day Pupil">Day Pupil</option>
-                            <option value="Scholarship">Scholarship</option>
-                        */}
                     </div>
 
 
@@ -695,22 +715,55 @@ const Registration = () => {
             {/* --- REGISTERED STUDENTS TABLE --- */}
             {/* ---------------------------------------------------- */}
             <div className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-full lg:max-w-4xl">
-                {/* ✅ Student count is now correct! 
-                    It shows the number of students displayed (filteredUsers) 
-                    out of the total students fetched for the school (users).
-                */}
                 <h2 className="text-2xl font-bold text-center mb-4">Registered Students ({filteredUsers.length} of {users.length})</h2>
 
-                <div className="mb-6">
-                    {/* Single Search Input for Name OR Class */}
+                {/* --- NEW FILTER CONTROLS --- */}
+                <div className="mb-6 space-y-4">
+                    {/* Search Input */}
                     <input
                         type="text"
-                        placeholder="Search by Student Name OR Class (e.g., John or Grade 7)"
+                        placeholder="Search by Student Name or ID..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                     />
+
+                    {/* Date and Class Filters */}
+                    <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                        <div className="flex-1">
+                            <label className="block mb-1 text-xs font-medium text-gray-700">Filter by Date</label>
+                            <select
+                                value={currentFilter.date}
+                                onChange={(e) => handleDateFilterChange(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg"
+                            >
+                                <option value={TODAY_DATE}>Today's Registrations</option>
+                                <option value="All">All Registrations</option>
+                            </select>
+                        </div>
+                        <div className="flex-1">
+                            <label className="block mb-1 text-xs font-medium text-gray-700">Filter by Class</label>
+                            <select
+                                value={currentFilter.class}
+                                onChange={(e) => handleClassFilterChange(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg"
+                            >
+                                <option value="All">All Classes</option>
+                                {classOptions.map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleResetFilters}
+                            className="w-full sm:w-auto mt-auto py-2 px-4 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
+                        >
+                            Reset
+                        </button>
+                    </div>
                 </div>
+
 
 
                 <div className="overflow-x-auto">
@@ -720,12 +773,10 @@ const Registration = () => {
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Class</th>
-                                <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Gender</th>
+                                {/* <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Gender</th> */}
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">AcademicYear</th>
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Photo</th>
-                                <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
-                                    Pupil Type
-                                </th>
+                              
 
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
@@ -737,7 +788,7 @@ const Registration = () => {
                                     <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.studentID}</td>
                                     <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{user.studentName}</td>
                                     <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{user.class}</td>
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{user.gender}</td>
+                                    {/* <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{user.gender}</td> */}
                                     <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">{user.academicYear}</td>
 
                                     <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -745,16 +796,21 @@ const Registration = () => {
                                             <img src={user.userPhotoUrl} alt={user.studentName} className="h-10 w-10 rounded-full object-cover" />
                                         )}
                                     </td>
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
-                                        {user.pupilType}
-                                    </td>
+                                 
 
-                                    <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
-                                        <button onClick={() => handleUpdate(user)} className="text-indigo-600 hover:text-indigo-900 mr-2">
+                                    <td className="px-3 py-4 whitespace-nowrap text-sm font-medium flex items-center space-x-2">
+                                        <button onClick={() => handleUpdate(user)} className="text-indigo-600 hover:text-indigo-900">
                                             Update
                                         </button>
                                         <button onClick={() => handleDelete(user.id, user.studentName)} className="text-red-600 hover:text-red-900">
                                             Delete
+                                        </button>
+                                        {/* ⭐ PRINT BUTTON ADDED ⭐ */}
+                                        <button onClick={() => handlePrint(user)} className="text-blue-600 hover:text-blue-900 text-sm font-medium flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm4 7a1 1 0 011-1h2a1 1 0 110 2h-2a1 1 0 01-1-1zm1-9a1 1 0 00-1 1v2h2V3a1 1 0 00-1-1z" clipRule="evenodd" />
+                                            </svg>
+                                            Print
                                         </button>
                                     </td>
                                 </tr>

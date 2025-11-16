@@ -30,6 +30,7 @@ import TeacherPupilsPage from "../TeacherAssignment/TeacherPupilsPage";
 import GradeSheetPage from "../TeacherAssignment/GradeSheetPage";
 import GeneralReportCard from "../PupilsPage/GeneralReportCard";
 import StudentFilterPage from "../Voters/StudentFilterPage";
+import LogoutPage from "../Admin/LogoutPage"
 
 
 // --- Navigation Items ---
@@ -45,16 +46,21 @@ const NAV_ITEMS = [
       { key: "classList", label: "Class List", icon: <MdPerson /> },
     ],
   },
-  {
-    key: "Results",
-    label: "Pupils Result",
+   {
+    key: "results",
+    label: "Pupils Results",
     icon: <MdBarChart />,
     children: [
-      { key: "GradeSheetPage", label: "Grade Sheet", icon: <MdPerson /> },
       { key: "GeneralReportCard", label: "ReportCard", icon: <MdPerson /> },
+   
 
     ],
   },
+   {
+      key: "LogoutPage",
+      label: "Logout",
+      icon: <MdWarning />, // 📖
+    },
 ];
 
 // --- Button component ---
@@ -136,6 +142,7 @@ function FeesPanel() {
       case "TeacherPupilsPage": return <TeacherPupilsPage />;
       case "GradeSheetPage": return <GradeSheetPage />;
       case "GeneralReportCard": return <GeneralReportCard />;
+       case "LogoutPage": return <LogoutPage />;
 
       default: return <Placeholder title={activeTab} />;
     }

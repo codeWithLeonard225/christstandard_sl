@@ -1,54 +1,48 @@
 // AdminPanel.jsx
 import React, { useState } from "react";
 import { MdDashboard, MdAttachMoney, MdAssignmentTurnedIn, MdKeyboardArrowDown, MdMenuBook, MdLibraryBooks } from "react-icons/md";
-import PupilPage from "./PupilPage";
-import IndividualReportCardTerm1 from "./IndividualReportCardTerm1";
-import IndividualReportCardTerm2 from "./IndividualReportCardTerm2";
-import IndividualReportCardTerm3 from "./IndividualReportCardTerm3";
-import PupilPastQuestionViewer from "./PupilPastQuestionViewer";
-import LogoutPage from "../Admin/LogoutPage"
+
+import TeacherGradesPage from "./TeacherPupilsPage";
+import TeacherQuestionsPageObjectives from "./TeacherQuestionsPageObjectives";
+import TeacherQuestionsPageTheory from "./TeacherQuestionsPageTheory";
+import TeacherAssignmentPage from "./TeacherAssignmentTheory";
 
 
 // Navigation Items
 const NAV_ITEMS = [
   {
-    key: "fees",
-    label: "Fees",
+    key: "grades",
+    label: "Grades",
     icon: <MdAttachMoney />,
   },
 
-  {
-    key: "result",
-    label: "Result",
-    icon: <MdAssignmentTurnedIn />, // 📚
-  },
-  {
-    key: "library",
-    label: "Library",
-    icon: <MdLibraryBooks />, // 📚
-  },
-  {
-    key: "schoolPastQuestions",
-    label: "School Past Questions",
-    icon: <MdMenuBook />, // 📖
-  },
+  // {
+  //   key: "result",
+  //   label: "Result",
+  //   icon: <MdAssignmentTurnedIn />, // 📚
+  // },
+  // {
+  //   key: "library",
+  //   label: "Library",
+  //   icon: <MdLibraryBooks />, // 📚
+  // },
+  // {
+  //   key: "schoolPastQuestions",
+  //   label: "School Past Questions",
+  //   icon: <MdMenuBook />, // 📖
+  // },
 
   {
-    key: "WaecPastQuestions",
-    label: "SmartPikin Waec Past Ques.",
-    icon: <MdMenuBook />,
+    key: "TeacherQuestionsPage ",
+    label: "Teacher Questions Page .",
+    icon: <MdAssignmentTurnedIn />,
     children: [
-      { key: "npse", label: "NPSE" },
-      { key: "bece", label: "BECE" },
-      { key: "wassce", label: "WASSCE" },
-      { key: "Quiz", label: "Test Yourself (Quiz)" },
-      { key: "syllabus", label: "Study syllabus" },
+      { key: "objectives", label: "Objectives" },
+      { key: "theory", label: "Theory" },
+      { key: "assignment", label: "Assignment" },
+      // { key: "Quiz", label: "Test Yourself (Quiz)" },
+      // { key: "syllabus", label: "Study syllabus" },
     ],
-  },
-   {
-    key: "assign",
-    label: "Assignment",
-    icon: <MdLibraryBooks />, // 📚
   },
   // {
   //   key: "LogoutPage",
@@ -82,7 +76,7 @@ const Dashboard = () => (
 );
 
 // Admin Panel
-function PrivatePupilsDashboard() {
+function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [openDropdown, setOpenDropdown] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -138,16 +132,15 @@ function PrivatePupilsDashboard() {
     switch (activeTab) {
       case "dashboard":
         return <Dashboard />;
-      case "fees":
-        return <PupilPage />;
-      case "result":
-        return <IndividualReportCardTerm1 />;
-      // case "term2":
-      //   return <IndividualReportCardTerm2 />;
-      // case "term3":
-      //   return <IndividualReportCardTerm3 />;
-      case "schoolPastQuestions":
-        return <PupilPastQuestionViewer />;
+      case "grades":
+        return <TeacherGradesPage />;
+      case "objectives":
+        return <TeacherQuestionsPageObjectives />;
+      case "theory":
+        return <TeacherQuestionsPageTheory />;
+      case "assignment":
+        return <TeacherAssignmentPage />;
+    
       case "LogoutPage":
         return <LogoutPage />;
 
@@ -163,7 +156,7 @@ function PrivatePupilsDashboard() {
         className={`fixed inset-y-0 left-0 z-40 w-64 bg-white p-4 border-r border-gray-200 shadow-lg transform transition-transform duration-300
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:static md:block`}
       >
-        <h2 className="text-3xl font-bold text-indigo-700 mb-6">Pupil Panel</h2>
+        <h2 className="text-3xl font-bold text-indigo-700 mb-6">Teacher Panel</h2>
         <div className="space-y-2 flex-grow">
           <Button
             variant={activeTab === "dashboard" ? "default" : "ghost"}
@@ -198,4 +191,4 @@ function PrivatePupilsDashboard() {
   );
 }
 
-export default PrivatePupilsDashboard;
+export default TeacherDashboard;

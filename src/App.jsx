@@ -7,7 +7,7 @@ import ProtectedRoute from "./Component/Security/ProtectedRoute";
 import TeacherGradesPage from "./Component/TeacherAssignment/TeacherPupilsPage";
 import PupilsDashboard from "./Component/PupilsPage/PupilsDashboard";
 import FeesPanel from "./Component/Admin/FeesPanel";
-import Testing from "./Component/Admin/Testing";
+import TeacherDashboard from "./Component/TeacherAssignment/TeacherDashboard";
 import Home from "./Component/Web/Pages/Home";
 import About from "./Component/Web/Pages/About";
 import Programs from "./Component/Web/Pages/Programs";
@@ -16,6 +16,8 @@ import ContactUsPage from "./Component/Web/Pages/ContactUsPage";
 import Developer from "./Component/Dashboard/Developer";
 import PupilUpdate from "./Component/TeacherAssignment/PupilUpdate";
 import PrivatePupilsDashboard from "./Component/PupilsPage/PrivatePupilsDashboard";
+import PrintableStudentForm from "./Component/Voters/PrintableStudentForm";
+
 
 function App() {
   return (
@@ -73,7 +75,7 @@ function App() {
             path="/subjectTeacher"
             element={
               <ProtectedRoute role="teacher">
-                <TeacherGradesPage />
+                <TeacherDashboard />
               </ProtectedRoute>
             }
           />
@@ -82,6 +84,14 @@ function App() {
             element={
               <ProtectedRoute role="ceo">
                 <Developer />
+              </ProtectedRoute>
+            }
+          />
+            <Route
+            path="/print-student/:studentID"
+            element={
+              <ProtectedRoute role="admin">
+                <PrintableStudentForm />
               </ProtectedRoute>
             }
           />

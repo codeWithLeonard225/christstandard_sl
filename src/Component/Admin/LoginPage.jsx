@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../../firebase";
 import { useNavigate } from "react-router-dom";
@@ -15,19 +15,28 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const { setUser } = useAuth();
 
-  // ✅ Define all collections to check
+  // 🔍 Check localStorage for existing session
+  useEffect(() => {
+    const savedUser = JSON.parse(localStorage.getItem("schoolUser"));
+    if (savedUser) {
+      // Skip login and go directly to dashboard
+      setUser(savedUser);
+      navigate(savedUser.navigationRoute, { state: savedUser });
+    }
+  }, [navigate, setUser]);
+
+  // ✅ All collections to check
   const collectionsToCheck = [
-    { name: "Admins", idField: "adminID", nameField: "adminName", role: "admin", route: null },
-    { name: "PupilsReg", idField: "studentID", nameField: "studentName", role: "pupil", route: null },
-    { name: "Teachers", idField: "teacherID", nameField: "teacherName", role: "teacher", route: "/subjectTeacher" },
-    { name: "CEOs", idField: "ceoID", nameField: "ceoName", role: "ceo", route: "/ceo" },
-    // 🆕 New Class login collection
-    { name: "Classes", idField: "classId", nameField: "className", role: "teacher", route: "/class" },
+    { name: "PupilsReg", idField: "studentID", nameField: "studentName", role: "pupil" },
+    { name: "Teachers", idField: "teacherID", nameField: "teacherName", role: "teacher" },
+    { name: "Admins", idField: "adminID", nameField: "adminName", role: "admin" },
+    { name: "CEOs", idField: "ceoID", nameField: "ceoName", role: "ceo" },
   ];
 
-  // Map adminType to route
-  const getAdminRoute = (adminType) => {
-    switch (adminType) {
+  // 🔗 Dynamic routes
+  const getAdminRoute = (type) => {
+    switch (type) {
+      case "Gov": return "/gov";
       case "Private": return "/admin";
       case "Fees": return "/registra";
       case "Special": return "/special";
@@ -35,9 +44,8 @@ const LoginPage = () => {
     }
   };
 
-  // Map pupilType to route
-  const getPupilRoute = (pupilType) => {
-    switch (pupilType) {
+  const getPupilRoute = (type) => {
+    switch (type) {
       case "Gov": return "/GovPupilDashboard";
       case "Private": return "/PrivatePupilsDashboard";
       case "GovSpecial": return "/GovPupilSpecial";
@@ -46,110 +54,98 @@ const LoginPage = () => {
     }
   };
 
-  
-const handleLogin = async (e) => {
-  e.preventDefault();
-  setError("");
-  setLoading(true);
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-  const trimmedUserID = userID.trim();
-  const trimmedUserName = userName.trim();
+    const trimmedUserID = userID.trim();
+    const trimmedUserName = userName.trim();
 
-  if (!trimmedUserID || !trimmedUserName) {
-    setError("Please enter your ID and Name.");
-    setLoading(false);
-    return;
-  }
+    if (!trimmedUserID || !trimmedUserName) {
+      setError("Please enter your ID and Name.");
+      setLoading(false);
+      return;
+    }
 
-  try {
-    let foundUser = null;
-    let userRole = null;
-    let schoolId = null;
-    let schoolName = null;
-    let schoolLogoUrl = null;
-    let schoolAddress = null;
-    let schoolMotto = null;
-    let schoolContact = null;
-    let email = null;
-    let navigationRoute = null;
+    try {
+      let foundUser = null;
+      let userRole = null;
+      let schoolId = null;
+      let navigationRoute = null;
+      let schoolInfo = {};
 
-    // 1️⃣ Iterate and search through collections
-    for (const { name, idField, nameField, role, route } of collectionsToCheck) {
-      // Query by ID only (since Firestore doesn't support case-insensitive name search)
-      const userQuery = query(collection(db, name), where(idField, "==", trimmedUserID));
-      const snapshot = await getDocs(userQuery);
+      // 🔍 1️⃣ Find user in collections
+      for (const { name, idField, nameField, role } of collectionsToCheck) {
+        const userQuery = query(collection(db, name), where(idField, "==", trimmedUserID));
+        const snapshot = await getDocs(userQuery);
 
-      if (!snapshot.empty) {
-        const matchedDoc = snapshot.docs.find((doc) => {
-          const data = doc.data();
-          // Compare names case-insensitively
-          return data[nameField]?.toLowerCase() === trimmedUserName.toLowerCase();
-        });
+        if (!snapshot.empty) {
+          const matchedDoc = snapshot.docs.find((doc) => {
+            const data = doc.data();
+            return data[nameField]?.toLowerCase() === trimmedUserName.toLowerCase();
+          });
 
-        if (matchedDoc) {
-          foundUser = matchedDoc.data();
-          userRole = role;
-          schoolId = foundUser.schoolId;
+          if (matchedDoc) {
+            foundUser = matchedDoc.data();
+            userRole = role;
+            schoolId = foundUser.schoolId;
 
-          // 🧭 Dynamic route determination
-          if (name === "Admins") {
-            navigationRoute = getAdminRoute(foundUser.adminType);
-          } else if (name === "PupilsReg") {
-            navigationRoute = getPupilRoute(foundUser.pupilType);
-          } else {
-            navigationRoute = route;
+            // Determine route
+            if (name === "Admins") navigationRoute = getAdminRoute(foundUser.adminType);
+            else if (name === "PupilsReg") navigationRoute = getPupilRoute(foundUser.pupilType);
+            else if (name === "Teachers") navigationRoute = "/subjectTeacher";
+            else if (name === "CEOs") navigationRoute = "/ceo";
+
+            break;
           }
-
-          break;
         }
       }
-    }
 
-    // 2️⃣ If user found and has schoolId
-    if (foundUser && schoolId) {
-      const schoolsQuery = query(collection(db, "Schools"), where("schoolID", "==", schoolId));
-      const schoolsSnapshot = await getDocs(schoolsQuery);
+      // 🔍 2️⃣ If found user
+      if (foundUser && schoolId) {
+        const schoolQuery = query(collection(db, "Schools"), where("schoolID", "==", schoolId));
+        const schoolSnap = await getDocs(schoolQuery);
 
-      if (!schoolsSnapshot.empty) {
-        const schoolData = schoolsSnapshot.docs[0].data();
-        schoolName = schoolData.schoolName;
-        schoolLogoUrl = schoolData.schoolLogoUrl || "/images/default.png";
-        schoolAddress = schoolData.schoolAddress || "Address not found";
-        schoolMotto = schoolData.schoolMotto || "No motto";
-        schoolContact = schoolData.schoolContact || "No contact info";
-        email = schoolData.email || "No email";
-      }
+        if (!schoolSnap.empty) {
+          const schoolData = schoolSnap.docs[0].data();
+          schoolInfo = {
+            schoolName: schoolData.schoolName,
+            schoolLogoUrl: schoolData.schoolLogoUrl || "/images/default.png",
+            schoolAddress: schoolData.schoolAddress || "Address not found",
+            schoolMotto: schoolData.schoolMotto || "No motto",
+            schoolContact: schoolData.schoolContact || "No contact info",
+            email: schoolData.email || "No email",
+          };
+        }
 
-      // Save to Auth context
-      setUser({
-        role: userRole,
-        data: foundUser,
-        schoolId,
-        schoolName,
-      });
-
-      navigate(navigationRoute, {
-        state: {
-          user: foundUser,
+        // ✅ Combine user + school info
+        const userSession = {
+          role: userRole,
+          data: foundUser,
           schoolId,
-          schoolName,
-          schoolLogoUrl,
-          schoolAddress,
-          schoolMotto,
-          schoolContact,
-          email,
-        },
-      });
-    } else {
-      setError("Invalid credentials. Please check your ID and Name.");
+          navigationRoute,
+          ...schoolInfo,
+        };
+
+        // ✅ Save to localStorage
+        localStorage.setItem("schoolUser", JSON.stringify(userSession));
+
+        // ✅ Save to Auth Context
+        setUser(userSession);
+
+        // ✅ Navigate to dashboard
+        navigate(navigationRoute, { state: userSession });
+      } else {
+        setError("Invalid credentials. Please check your ID and Name.");
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("A system error occurred. Please try again.");
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error("Login error:", error);
-    setError("A system error occurred. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">

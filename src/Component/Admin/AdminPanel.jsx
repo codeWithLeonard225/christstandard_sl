@@ -39,6 +39,9 @@ import BECEStatementOfResult from "../CeoPanel/BECEStatementOfResult";
 import TeacherGradesPage from "../TeacherAssignment/TeacherPupilsPageAdmin";
 import TeacherAssignmentReport from "../TeacherAssignment/TeacherAssignmentReport";
 import PastQuestions from "../Admin/PastQuestionUpload";
+import PupilIDCard from "../Voters/PupilIDCard";
+import IDCardPage from "../Voters/IDCardPage";
+import LogoutPage from "../Admin/LogoutPage"
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
@@ -69,22 +72,22 @@ const NAV_ITEMS = [
       { key: "TeacherRegistration", label: "Teacher Regis", icon: <MdPerson /> },
       { key: "subjects", label: "Subjects", icon: <MdPerson /> },
       { key: "TeacherAssignment", label: "Teacher Assignment", icon: <MdPerson /> },
-       { key: "TeacherAssignmentReport", label: "Teacher Assignment Report ", icon: <MdPerson /> },
-         { key: "PastQuestions", label: "Upload Past Questions ", icon: <MdPerson /> },
+      { key: "TeacherAssignmentReport", label: "Teacher Assignment Report ", icon: <MdPerson /> },
+      { key: "PastQuestions", label: "Upload Past Questions ", icon: <MdPerson /> },
 
 
     ],
   },
-  {
+   {
     key: "results",
     label: "Pupils Results",
     icon: <MdBarChart />,
     children: [
-      { key: "GradeSheetPage", label: "Test Grade Sheet", icon: <MdPerson /> },
+      // { key: "GradeSheetPage", label: "Test Grade Sheet", icon: <MdPerson /> },
+      { key: "TeacherPupilsPageAdmin", label: "TeacherPupilsGrade", icon: <MdPerson /> },
       { key: "SubGradeMatrixPage", label: "Sub Grade Sheet", icon: <MdPerson /> },
       { key: "ClassFullTermMatrixPage", label: "Term Grade Sheet", icon: <MdPerson /> },
       { key: "GeneralReportCard", label: "ReportCard", icon: <MdPerson /> },
-        { key: "TeacherPupilsPageAdmin", label: "TeacherPupilsGrade", icon: <MdPerson /> },
       // { key: "Testing", label: "Testing", icon: <MdPerson /> },
 
     ],
@@ -96,9 +99,26 @@ const NAV_ITEMS = [
     children: [
       { key: "beceResult", label: "Bece Result Entering", icon: <MdPerson /> },
       { key: "beceReport", label: "Bece Result Report", icon: <MdPerson /> },
-     
+
 
     ],
+  },
+  {
+    key: "idcards",
+    label: "Pupils ID Cards",
+    icon: <MdBarChart />,
+    children: [
+      { key: "PupilIDCard", label: "PupilIDCard", icon: <MdPerson /> },
+      { key: "IDCardPage", label: "IDCardPage", icon: <MdPerson /> },
+
+      // { key: "Testing", label: "Testing", icon: <MdPerson /> },
+
+    ],
+  },
+   {
+    key: "LogoutPage",
+    label: "Logout",
+    icon: <MdWarning />, // 📖
   },
 ];
 
@@ -180,9 +200,12 @@ function AdminPanel() {
       case "beceResult": return <NationalResultPage />;
       case "beceReport": return <BECEStatementOfResult />;
       case "GeneralReportCard": return <GeneralReportCard />;
-         case "TeacherPupilsPageAdmin": return <TeacherGradesPage />;
-          case "TeacherAssignmentReport": return <TeacherAssignmentReport />;
-          case "PastQuestions": return <PastQuestions />;
+      case "TeacherPupilsPageAdmin": return <TeacherGradesPage />;
+      case "TeacherAssignmentReport": return <TeacherAssignmentReport />;
+      case "PastQuestions": return <PastQuestions />;
+      case "PupilIDCard": return <PupilIDCard />;
+      case "IDCardPage": return <IDCardPage />;
+        case "LogoutPage": return <LogoutPage />;
 
       default: return <Placeholder title={activeTab} />;
     }
