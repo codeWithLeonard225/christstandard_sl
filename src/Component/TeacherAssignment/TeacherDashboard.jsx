@@ -6,6 +6,7 @@ import TeacherGradesPage from "./TeacherPupilsPage";
 import TeacherQuestionsPageObjectives from "./TeacherQuestionsPageObjectives";
 import TeacherQuestionsPageTheory from "./TeacherQuestionsPageTheory";
 import TeacherAssignmentPage from "./TeacherAssignmentTheory";
+import LogoutPage from "../Admin/LogoutPage"
 
 
 // Navigation Items
@@ -16,21 +17,7 @@ const NAV_ITEMS = [
     icon: <MdAttachMoney />,
   },
 
-  // {
-  //   key: "result",
-  //   label: "Result",
-  //   icon: <MdAssignmentTurnedIn />, // 📚
-  // },
-  // {
-  //   key: "library",
-  //   label: "Library",
-  //   icon: <MdLibraryBooks />, // 📚
-  // },
-  // {
-  //   key: "schoolPastQuestions",
-  //   label: "School Past Questions",
-  //   icon: <MdMenuBook />, // 📖
-  // },
+  
 
   {
     key: "TeacherQuestionsPage ",
@@ -44,11 +31,11 @@ const NAV_ITEMS = [
       // { key: "syllabus", label: "Study syllabus" },
     ],
   },
-  // {
-  //   key: "LogoutPage",
-  //   label: "Logout",
-  //   icon: <MdMenuBook />, // 📖
-  // },
+  {
+    key: "LogoutPage",
+    label: "Logout",
+    icon: <MdMenuBook />, // 📖
+  },
 ];
 
 // Button component
