@@ -33,18 +33,18 @@ const NAV_ITEMS = [
     label: "School Past Questions",
     icon: <MdMenuBook />, // 📖
   },
-  // {
-  //   key: "WaecPastQuestions",
-  //   label: "Waec Past Questions",
-  //   icon: <MdAssignmentTurnedIn />,
-  //   children: [
-  //     { key: "npse", label: "NPSE" },
-  //     { key: "bece", label: "BECE" },
-  //     { key: "wassce", label: "WASSCE" },
-  //     { key: "Quiz", label: "Test Yourself (Quiz)" },
-  //     { key: "syllabus", label: "Study syllabus" },
-  //   ],
-  // },
+  {
+    key: "WaecPastQuestions",
+    label: "Waec Past Questions",
+    icon: <MdAssignmentTurnedIn />,
+    children: [
+      { key: "npse", label: "NPSE" },
+      { key: "bece", label: "BECE" },
+      { key: "wassce", label: "WASSCE" },
+      { key: "Quiz", label: "Test Yourself (Quiz)" },
+      { key: "syllabus", label: "Study syllabus" },
+    ],
+  },
 ];
 
 // Button component

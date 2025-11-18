@@ -3,8 +3,6 @@ import React, { useState } from "react";
 import { MdDashboard, MdAttachMoney, MdAssignmentTurnedIn, MdKeyboardArrowDown, MdMenuBook, MdLibraryBooks } from "react-icons/md";
 import PupilPage from "./PupilPage";
 import IndividualReportCardTerm1 from "./IndividualReportCardTerm1";
-import IndividualReportCardTerm2 from "./IndividualReportCardTerm2";
-import IndividualReportCardTerm3 from "./IndividualReportCardTerm3";
 import PupilPastQuestionViewer from "./PupilPastQuestionViewer";
 import LogoutPage from "../Admin/LogoutPage"
 
@@ -50,11 +48,11 @@ const NAV_ITEMS = [
     label: "Assignment",
     icon: <MdLibraryBooks />, // 📚
   },
-  // {
-  //   key: "LogoutPage",
-  //   label: "Logout",
-  //   icon: <MdMenuBook />, // 📖
-  // },
+  {
+    key: "LogoutPage",
+    label: "Logout",
+    icon: <MdMenuBook />, // 📖
+  },
 ];
 
 // Button component
