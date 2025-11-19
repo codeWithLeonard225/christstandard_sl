@@ -215,7 +215,7 @@ const TeacherQuestionsPageTheory = () => {
         }
 
         const topicId = `${schoolId}_${selectedClass}_${selectedSubject}`;
-        const topicRef = doc(schoollpq, "Topics", topicId);
+        const topicRef = doc(db, "Topics", topicId);
         
         const newTopicsList = [...topics, newTopic].sort((a, b) => a.localeCompare(b));
 

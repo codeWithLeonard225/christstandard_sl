@@ -208,19 +208,19 @@ const GradesAuditPage = () => {
         try {
             if (gradeData && newGradeValue === null) {
                 if (!window.confirm(`Delete grade for ${pupilID}?`)) { setSubmitting(false); return; }
-                await deleteDoc(doc(schooldb, "PupilGrades", gradeData.docId));
+                await deleteDoc(doc(db, "PupilGrades", gradeData.docId));
                 alert(`Grade for ${pupilID} deleted`);
             } else if (typeof newGradeValue === 'number' && !isNaN(newGradeValue)) {
                 if (gradeData) {
                     if (!window.confirm(`Update grade for ${pupilID}?`)) { setSubmitting(false); return; }
-                    await setDoc(doc(schooldb, "PupilGrades", gradeData.docId), {
+                    await setDoc(doc(db, "PupilGrades", gradeData.docId), {
                         grade: newGradeValue,
                         lastModifiedByAdmin: serverTimestamp(),
                     }, { merge: true });
                     alert(`Grade for ${pupilID} updated`);
                 } else {
                     if (!window.confirm(`Add new grade for ${pupilID}?`)) { setSubmitting(false); return; }
-                    const docRef = doc(collection(schooldb, "PupilGrades"));
+                    const docRef = doc(collection(db, "PupilGrades"));
                     await setDoc(docRef, {
                         pupilID,
                         className: selectedClass,

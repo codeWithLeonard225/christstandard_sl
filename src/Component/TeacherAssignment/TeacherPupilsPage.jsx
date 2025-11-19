@@ -272,13 +272,6 @@ const TeacherGradesPage = () => {
   }, [selectedClass, academicYear, schoolId]);
 
 
-
-
-
-  // --- Check for existing grades (UNAVOIDABLE FIREBASE READ) ---
-
-  // This must query Firebase live to ensure the submission status is current.
-
   useEffect(() => {
 
     const checkExistingGrades = async () => {
@@ -416,7 +409,7 @@ const TeacherGradesPage = () => {
 
         if (gradeValue !== "") {
 
-          const docRef = doc(collection(schooldb, "PupilGrades"));
+          const docRef = doc(collection(db, "PupilGrades"));
 
           await setDoc(docRef, {
 
