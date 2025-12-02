@@ -43,6 +43,8 @@ import PupilIDCard from "../Voters/PupilIDCard";
 import IDCardPage from "../Voters/IDCardPage";
 import LogoutPage from "../Admin/LogoutPage"
 import AttendancePage from "../Voters/AttendancePage"
+import CopyPupilGrades from "../Voters/CopyPupilGrades"
+import FixClassNames from "../Voters/FixClassNames"
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
@@ -126,6 +128,16 @@ const NAV_ITEMS = [
     label: "Pupil Attendance",
     icon: <MdWarning />, // 📖
   },
+  //  {
+  //   key: "CopyPupilGrades",
+  //   label: "CopyPupilGrades",
+  //   icon: <MdWarning />, // 📖
+  // },
+  //  {
+  //   key: "FixClassNames",
+  //   label: "FixClassNamesInP_Grade",
+  //   icon: <MdWarning />, // 📖
+  // },
 ];
 
 // --- Button component ---
@@ -213,6 +225,8 @@ function AdminPanel() {
       case "IDCardPage": return <IDCardPage />;
         case "LogoutPage": return <LogoutPage />;
         case "pupilAttendance": return <AttendancePage />;
+        case "CopyPupilGrades": return <CopyPupilGrades />;
+        case "FixClassNames": return <FixClassNames />;
 
       default: return <Placeholder title={activeTab} />;
     }

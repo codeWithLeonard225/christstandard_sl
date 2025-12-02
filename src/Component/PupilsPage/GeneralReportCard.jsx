@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { db } from "../../../firebase";
+import { schooldb } from "../Database/SchoolsResults";
 import { getDocs, doc, collection, query, where, onSnapshot } from "firebase/firestore";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -19,12 +20,12 @@ const GeneralReportCard = () => {
   const [classGradesData, setClassGradesData] = useState([]);
   const [pupilGradesData, setPupilGradesData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedTerm, setSelectedTerm] = useState("Term 1"); 
+  const [selectedTerm, setSelectedTerm] = useState("Term 1"); // Start with 'Term 1' for display
   const location = useLocation();
-  
-  // Cache for subject percentages
+  // 🔹 Fetch Classes Cache for subjectPercentage
   const [classesCache, setClassesCache] = useState([]);
   const [totalPupilsInClass, setTotalPupilsInClass] = useState(0);
+
 
   const {
     schoolId,
@@ -37,31 +38,19 @@ const GeneralReportCard = () => {
   } = location.state || {};
 
 
-  // 🧮 Define term-test mapping
+  // 🧮 Define term-test mapping (CORRECTED)
   const termTests = {
     "Term 1": ["Term 1 T1", "Term 1 T2"],
     "Term 2": ["Term 2 T1", "Term 2 T2"],
     "Term 3": ["Term 3 T1", "Term 3 T2"],
   };
 
-// --- HANDLERS ---
-
-  // 🆕 NEW: Centralized handler for class change to ensure pupil reset
-  const handleClassChange = useCallback((newClass) => {
-    setSelectedClass(newClass);
-    // Critical: Reset the selected pupil immediately when the class filter changes
-    setSelectedPupil("");
-  }, []);
-
-
-// --- EFFECT HOOKS ---
-
-  // 1. 🔹 Fetch academic years and classes
+  // 🔹 Fetch academic years and classes (Class names from PupilGrades are assumed CLEAN)
   useEffect(() => {
     if (!schoolId) return;
 
     const q = query(
-      collection(db, "PupilGrades"),
+      collection(schooldb, "PupilGrades"),
       where("schoolId", "==", schoolId)
     );
 
@@ -69,23 +58,20 @@ const GeneralReportCard = () => {
       const data = snapshot.docs.map((doc) => doc.data());
 
       const years = [...new Set(data.map((d) => d.academicYear))].sort().reverse();
-      const classes = [...new Set(data.map((d) => d.className))].sort();
+      // Ensure class names are stored/compared using their trimmed names
+      const classes = [...new Set(data.map((d) => d.className.trim()))].sort();
 
       setAcademicYears(years);
       setAvailableClasses(classes);
 
-      if (years.length > 0 && !academicYear) setAcademicYear(years[0]);
-      
-      // Only set initial class if none is selected
-      if (classes.length > 0 && !selectedClass) {
-        handleClassChange(classes[0]);
-      }
+      if (years.length > 0) setAcademicYear(years[0]);
+      // Only set class if it hasn't been set or if the previously selected class is no longer available
+      if (classes.length > 0 && !selectedClass) setSelectedClass(classes[0]);
     });
 
     return () => unsubscribe();
-  }, [schoolId, academicYear, selectedClass, handleClassChange]);
+  }, [schoolId, selectedClass]);
 
-  // 2. 🔹 Fetch Classes Cache (for subjectPercentage)
   useEffect(() => {
     if (!schoolId) return;
     const fetchClasses = async () => {
@@ -96,93 +82,97 @@ const GeneralReportCard = () => {
     fetchClasses();
   }, [schoolId]);
 
-  // 3. ✅ Count total pupils in selected class and academic year
+
+  // ✅ Count total pupils in selected class and academic year (FIXED: Uses client-side filter)
   useEffect(() => {
-    if (!academicYear || !selectedClass || !schoolId) {
+    const trimmedClass = selectedClass; // The clean class name from PupilGrades
+
+    if (!academicYear || !trimmedClass || !schoolId) {
         setTotalPupilsInClass(0);
         return;
-    };
+    }
 
+    // 🚨 FIX: Query all pupils for the school/year, as the 'class' field might be untrimmed.
     const pupilsRef = query(
       collection(db, "PupilsReg"),
       where("academicYear", "==", academicYear),
-      where("class", "==", selectedClass), // Ensure this field name matches Firestore!
       where("schoolId", "==", schoolId)
     );
 
     const unsubscribe = onSnapshot(pupilsRef, (snapshot) => {
-      setTotalPupilsInClass(snapshot.size);
+      // Filter locally where the stored class (after trimming) matches the clean 'trimmedClass'
+      const total = snapshot.docs
+        .filter(doc => doc.data().class && doc.data().class.trim() === trimmedClass)
+        .length;
+      
+      setTotalPupilsInClass(total);
     });
 
     return () => unsubscribe();
   }, [academicYear, selectedClass, schoolId]);
 
 
-  // 4. 🔹 Fetch pupils in class/year - **CORE FIX LOGIC REMAINS HERE**
+  // 🔹 Fetch pupils in class/year (FIXED: Uses client-side filter)
   useEffect(() => {
-    if (!academicYear || !selectedClass || !schoolId) {
+    const trimmedClass = selectedClass; // The clean class name from PupilGrades
+
+    if (!academicYear || !trimmedClass || !schoolId) {
         setPupils([]);
         return;
     }
     
-    // We query the PupilsReg collection using "class"
+    // 💥 FIX: Reset selected pupil when class changes to prevent looking up old pupil in new class
+    setSelectedPupil("");
+
+    // 🚨 FIX: Query all pupils for the school/year, as the 'class' field might be untrimmed.
     const q = query(
       collection(db, "PupilsReg"),
       where("schoolId", "==", schoolId),
       where("academicYear", "==", academicYear),
-      where("class", "==", selectedClass) // Ensure this field name matches Firestore!
+      // ❌ REMOVED: where("class", "==", selectedClass)
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => a.studentName.localeCompare(b.studentName)); // Sort alphabetically
+      const allPupilData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+      // ✅ FILTER LOCALLY: Find pupils whose stored class name (after trimming) matches the selected, trimmed class name
+      const filteredPupils = allPupilData
+        .filter(pupil => pupil.class && pupil.class.trim() === trimmedClass)
+        .sort((a, b) => a.studentName.localeCompare(b.studentName)); // 🔹 Sort alphabetically
     
-      setPupils(data);
+      setPupils(filteredPupils);
       
-      // Set the first pupil of the new list as the default, ONLY IF no pupil is already selected
-      // This is safe because selectedPupil is reset by handleClassChange
-      if (data.length > 0 && !selectedPupil) {
-          setSelectedPupil(data[0].studentID);
-      } else if (data.length === 0) {
-          setSelectedPupil("");
-      }
+    // Set the first pupil of the new list as the default
+      if (filteredPupils.length > 0) setSelectedPupil(filteredPupils[0].studentID);
     });
     return () => unsubscribe();
-  }, [academicYear, selectedClass, schoolId, selectedPupil]); // Note: Added selectedPupil to dependencies to re-run if it was reset externally
+  }, [academicYear, selectedClass, schoolId]);
 
 
-  // 5. 🔹 Fetch grades for class
+  // 🔹 Fetch grades for class (No change needed, selectedClass is clean)
   useEffect(() => {
-    if (!academicYear || !selectedClass) {
-        setClassGradesData([]);
-        return;
-    }
+    if (!academicYear || !selectedClass) return;
     const q = query(
-      collection(db, "PupilGrades"),
+      collection(schooldb, "PupilGrades"),
       where("academicYear", "==", academicYear),
       where("schoolId", "==", schoolId),
-      where("className", "==", selectedClass)
+      where("className", "==", selectedClass) // This query is safe because the class is clean
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setClassGradesData(snapshot.docs.map((doc) => doc.data()));
     });
     return () => unsubscribe();
-  }, [academicYear, selectedClass, schoolId]);
+  }, [academicYear, selectedClass]);
 
-  // 6. 🔹 Fetch pupil grades
+  // 🔹 Fetch pupil grades (No change needed, selectedClass is clean)
   useEffect(() => {
-    if (!academicYear || !selectedClass || !selectedPupil) {
-        setPupilGradesData([]);
-        setLoading(false);
-        return;
-    }
+    if (!academicYear || !selectedClass || !selectedPupil) return;
     setLoading(true);
     const q = query(
-      collection(db, "PupilGrades"),
+      collection(schooldb, "PupilGrades"),
       where("academicYear", "==", academicYear),
       where("schoolId", "==", schoolId),
-      where("className", "==", selectedClass),
+      where("className", "==", selectedClass), // This query is safe because the class is clean
       where("pupilID", "==", selectedPupil)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -190,13 +180,13 @@ const GeneralReportCard = () => {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [academicYear, selectedClass, selectedPupil, schoolId]);
+  }, [academicYear, selectedClass, selectedPupil]);
 
   // Use the new test identifiers based on the selected term
   const tests = termTests[selectedTerm];
 
 
-  // 🔹 Updated useMemo for percentage calculation (Unchanged)
+  // 🔹 Updated useMemo for percentage calculation (unchanged, uses existing state)
   const { subjects, reportRows, totalMarks, overallPercentage, overallRank } = useMemo(() => {
     if (pupilGradesData.length === 0)
       return { subjects: [], reportRows: [], totalMarks: 0, overallPercentage: 0, overallRank: "—" };
@@ -261,12 +251,12 @@ const GeneralReportCard = () => {
     const overallPercentage = totalSubjectPercentage > 0 ? ((totalSum / totalSubjectPercentage) * 100).toFixed(1) : 0;
 
     return { subjects: uniqueSubjects, reportRows: subjectData, totalMarks, overallPercentage, overallRank };
-  }, [pupilGradesData, classGradesData, selectedPupil, selectedTerm, selectedClass, classesCache, schoolId, tests]);
+  }, [pupilGradesData, classGradesData, selectedPupil, selectedTerm, selectedClass, classesCache]);
 
 
   const pupilInfo = pupils.find((p) => p.studentID === selectedPupil);
 
-  // GRADE COLOR LOGIC (Unchanged)
+  // GRADE COLOR LOGIC (unchanged)
   const getGradeColor = (val) => {
     const grade = Number(val);
     if (grade >= 50) {
@@ -277,7 +267,7 @@ const GeneralReportCard = () => {
     return "text-gray-900";
   };
 
-  // 🧾 Handle PDF Printing (Unchanged)
+  // 🧾 Handle PDF Printing (unchanged)
  const handlePrintPDF = () => {
     if (!pupilInfo) return;
 
@@ -286,7 +276,7 @@ const GeneralReportCard = () => {
     // Pupil photo
     const pupilPhotoUrl = pupilInfo.userPhotoUrl || "https://via.placeholder.com/96";
 
-    // Helper to load images
+    // Helper to load images (unchanged)
     const loadImage = (url) =>
       new Promise((resolve) => {
         const img = new Image();
@@ -299,7 +289,7 @@ const GeneralReportCard = () => {
     Promise.all([loadImage(schoolLogoUrl), loadImage(pupilPhotoUrl)]).then(([logo, pupilPhoto]) => {
       let y = 30;
 
-      // 1. School Name (Centered)
+      // 1. School Name (Centered) (unchanged)
       doc.setFontSize(18).setFont(doc.getFont().fontName, "bold");
       doc.text(schoolName || "Unknown School", doc.internal.pageSize.getWidth() / 2, y, { align: "center" });
       y += 5;
@@ -308,7 +298,7 @@ const GeneralReportCard = () => {
       doc.line(40, y, doc.internal.pageSize.getWidth() - 40, y);
       y += 15;
 
-      // 2. School Info & Logos
+      // 2. School Info & Logos (unchanged)
       if (logo) doc.addImage(logo, "PNG", 40, y, 50, 50);
 
       doc.setFontSize(10).setFont(doc.getFont().fontName, "normal");
@@ -323,15 +313,17 @@ const GeneralReportCard = () => {
 
       y += 75;
       
-      // Add extra vertical space before pupil info starts
+      // ⭐️ CHANGE 2: Add extra vertical space before pupil info starts
       y += 10; 
 
-      // 3. Pupil & Class Info
+      // 3. Pupil & Class Info (UNCHANGED logic)
       doc.setFontSize(12).setFont(doc.getFont().fontName, "bold");
       
       // First row: Pupil ID and Class with total pupils
       doc.text(`Pupil ID: ${pupilInfo.studentID}`, 40, y);
       
+      // ⭐️ CHANGE 1: Combine Class and Total Pupils into one line
+      // NOTE: pupilInfo.class might still be untrimmed, but it's okay for display purposes
       const classText = `Class: ${pupilInfo.class || "N/A"} (${totalPupilsInClass} pupils)`;
       doc.text(classText, doc.internal.pageSize.getWidth() / 2 + 10, y);
       y += 20;
@@ -341,15 +333,15 @@ const GeneralReportCard = () => {
       doc.text(`Academic Year: ${academicYear}`, doc.internal.pageSize.getWidth() / 2 + 10, y);
       y += 25;
       
-      // 4. Term Header
+      // 4. Term Header (unchanged)
       doc.setFontSize(16).setFont(doc.getFont().fontName, "bold");
       doc.text(selectedTerm, doc.internal.pageSize.getWidth() / 2, y, { align: "center" });
       y += 20;
 
-      // 5. Grades Table
+      // 5. Grades Table (unchanged)
       const tableData = reportRows.map((r) => [r.subject, r.test1, r.test2, r.mean, r.rank]);
       
-      const pdfHeaders = ["Subject", tests[0].split(' ').pop() || 'T1', tests[1].split(' ').pop() || 'T2', "Mean", "Rank"];
+      const pdfHeaders = ["Subject", tests[0].split(' ')[2] || 'T1', tests[1].split(' ')[2] || 'T2', "Mean", "Rank"];
 
       autoTable(doc, {
         startY: y,
@@ -378,22 +370,23 @@ const GeneralReportCard = () => {
         },
       });
 
-      // 6. Footer Summary
+      // 6. Footer Summary (unchanged)
       const finalY = doc.lastAutoTable.finalY + 20;
       doc.setFontSize(12).setFont(doc.getFont().fontName, "bold");
       doc.text(`Total Marks: ${totalMarks}`, 40, finalY);
       doc.text(`Percentage: ${overallPercentage}%`, 40, finalY + 15);
       doc.text(`Overall Position: ${overallRank} / ${totalPupilsInClass}`, 40, finalY + 30);
 
-      // Signature
+      // Signature (unchanged)
       doc.setFontSize(10).setFont(doc.getFont().fontName, "normal");
       doc.text("________________________", 400, finalY + 20);
       doc.text("Principal's Signature", 400, finalY + 35);
 
-      // Save PDF
+      // Save PDF (unchanged)
       doc.save(`${pupilInfo.studentName}_${selectedTerm}_Report.pdf`);
     });
   };
+
 
 
   // 🧾 UI
@@ -401,7 +394,7 @@ const GeneralReportCard = () => {
     <div className="max-w-5xl mx-auto p-6 bg-white shadow-xl rounded-2xl">
       <h2 className="text-2xl font-bold text-center text-indigo-700 mb-6">{schoolName}</h2>
 
-      {/* Term selector */}
+      {/* Term selector (unchanged) */}
       <div className="flex justify-center gap-4 mb-6">
         {Object.keys(termTests).map((term) => (
           <button
@@ -415,7 +408,7 @@ const GeneralReportCard = () => {
         ))}
       </div>
 
-      {/* Filters */}
+      {/* Filters (unchanged) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 p-4 border rounded-lg bg-indigo-50">
         <div>
           <label className="font-semibold">Academic Year:</label>
@@ -428,11 +421,7 @@ const GeneralReportCard = () => {
 
         <div>
           <label className="font-semibold">Class:</label>
-          <select 
-                className="w-full border rounded-lg px-3 py-2" 
-                value={selectedClass} 
-                onChange={(e) => handleClassChange(e.target.value)} // 💥 Use the centralized handler
-            >
+          <select className="w-full border rounded-lg px-3 py-2" value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}>
             {availableClasses.map((c) => (
               <option key={c}>{c}</option>
             ))}
@@ -447,14 +436,11 @@ const GeneralReportCard = () => {
                 {p.studentName}
               </option>
             ))}
-            {pupils.length === 0 && selectedClass && (
-                <option value="" disabled>No pupils found in this class</option>
-            )}
           </select>
         </div>
       </div>
 
-      {/* Print Button */}
+      {/* Print Button (unchanged) */}
       <div className="flex justify-end mb-4">
         <button
           onClick={handlePrintPDF}
@@ -465,7 +451,7 @@ const GeneralReportCard = () => {
         </button>
       </div>
 
-      {/* 🧑‍🎓 Pupil Info (On-screen display) */}
+      {/* 🧑‍🎓 Pupil Info (On-screen display) (unchanged) */}
       {pupilInfo && (
         <div className="flex items-center gap-4 mb-6 border p-4 rounded-lg bg-gray-50 shadow-sm">
           {pupilInfo.userPhotoUrl ? (
@@ -512,7 +498,7 @@ const GeneralReportCard = () => {
             <thead className="bg-indigo-600 text-white">
               <tr>
                 <th className="px-4 py-2 text-left">Subject</th>
-                {/* UPDATED: Use the last part of the test name for cleaner UI headers */}
+                {/* 💥 UPDATED: Use the last part of the test name for cleaner UI headers */}
                 {tests.map((t) => (
                   <th key={t} className="px-4 py-2">
                     {t.split(' ').pop()}
@@ -533,7 +519,7 @@ const GeneralReportCard = () => {
                 </tr>
               ))}
 
-              {/* Footer rows */}
+              {/* Footer rows (unchanged) */}
               <tr className="bg-indigo-100 font-bold text-indigo-800 border-t-2 border-indigo-600">
                 <td className="text-left px-4 py-2 text-base">Combined Scores</td>
                 <td colSpan="2"></td>

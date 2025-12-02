@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { db } from "../../../firebase";
+import { schooldb } from "../Database/SchoolsResults";
 import {
     collection,
     onSnapshot,

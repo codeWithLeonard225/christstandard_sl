@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { db } from "../../../firebase";
+import { schooldb } from "../Database/SchoolsResults"; 
 import {
     collection,
     onSnapshot,
@@ -56,7 +57,10 @@ const GradesAuditPage = () => {
             setAllTeachers(uniqueTeachers);
 
             const uniqueAssignments = data.reduce((acc, assignment) => {
-                const existing = acc.find(a => a.className === assignment.className);
+                // Ensure assignments are stored/compared using their trimmed names
+                const trimmedClassName = assignment.className.trim();
+                const existing = acc.find(a => a.className === trimmedClassName);
+                
                 if (existing) {
                     assignment.subjects.forEach(subject => {
                         if (!existing.subjects.includes(subject)) {
@@ -64,14 +68,16 @@ const GradesAuditPage = () => {
                         }
                     });
                 } else {
-                    acc.push({ ...assignment, subjects: [...assignment.subjects] });
+                    acc.push({ ...assignment, className: trimmedClassName, subjects: [...assignment.subjects] });
                 }
                 return acc;
             }, []).sort((a, b) => a.className.localeCompare(b.className));
+            
             setAssignments(uniqueAssignments);
 
             if (uniqueAssignments.length > 0) {
                 if (!selectedClass || !uniqueAssignments.some(a => a.className === selectedClass)) {
+                    // Set initial selection to the first *trimmed* class
                     setSelectedClass(uniqueAssignments[0].className);
                     setSelectedSubject(uniqueAssignments[0].subjects[0]);
                 }
@@ -91,26 +97,37 @@ const GradesAuditPage = () => {
         return () => unsub();
     }, []);
 
-    // --- 3️⃣ Fetch pupils for selected class ---
+    // --- 3️⃣ Fetch pupils for selected class (FIXED: Client-side filtering) ---
     useEffect(() => {
-        if (!selectedClass || !academicYear || !schoolId) {
+        // We use the already-trimmed `selectedClass` state value
+        const trimmedClass = selectedClass;
+
+        if (!trimmedClass || !academicYear || !schoolId) {
             setPupils([]);
             return;
         }
 
+        // 🚨 FIX: Query all pupils for the school/year, as the 'class' field might be untrimmed.
         const pupilsQuery = query(
             collection(db, "PupilsReg"),
-            where("class", "==", selectedClass),
             where("academicYear", "==", academicYear),
             where("schoolId", "==", schoolId)
         );
 
         const unsub = onSnapshot(pupilsQuery, (snapshot) => {
-            const data = snapshot.docs
-                .map((doc) => ({ id: doc.id, studentID: doc.id, ...doc.data() }))
+            const allPupilsData = snapshot.docs.map((doc) => ({
+                id: doc.id,
+                studentID: doc.id,
+                ...doc.data()
+            }));
+
+            // ✅ FILTER LOCALLY: Filter the results where the stored class (after trimming)
+            // matches the clean 'trimmedClass' state value.
+            const filteredPupils = allPupilsData
+                .filter(pupil => pupil.class && pupil.class.trim() === trimmedClass)
                 .sort((a, b) => a.studentName?.localeCompare(b.studentName));
 
-            setPupils(data);
+            setPupils(filteredPupils);
 
             // Load pending updates from localforage
             gradesStore.getItem("pendingUpdates").then((pending) => {
@@ -121,15 +138,17 @@ const GradesAuditPage = () => {
         return () => unsub();
     }, [selectedClass, academicYear, schoolId]);
 
-    // --- 4️⃣ Fetch grades with caching ---
+    // --- 4️⃣ Fetch grades with caching (Uses trimmedClass, which is correct) ---
     const fetchGrades = useCallback(async () => {
-        if (!selectedClass || !selectedSubject || !selectedTest || !academicYear || !schoolId) {
+        const trimmedClass = selectedClass; // Already trimmed from state
+
+        if (!trimmedClass || !selectedSubject || !selectedTest || !academicYear || !schoolId) {
             setCurrentGrades({});
             setUpdatedGrades({});
             return;
         }
 
-        const cacheKey = `${schoolId}_${selectedClass}_${selectedSubject}_${selectedTest}_${academicYear}`;
+        const cacheKey = `${schoolId}_${trimmedClass}_${selectedSubject}_${selectedTest}_${academicYear}`;
 
         try {
             const cachedGrades = await gradesStore.getItem(cacheKey);
@@ -143,8 +162,9 @@ const GradesAuditPage = () => {
 
         try {
             let gradeQuery = query(
-                collection(db, "PupilGrades"),
-                where("className", "==", selectedClass),
+                collection(schooldb, "PupilGrades"),
+                // This assumes your previous fix ensured 'PupilGrades' entries are written with trimmed names
+                where("className", "==", trimmedClass), 
                 where("subject", "==", selectedSubject),
                 where("test", "==", selectedTest),
                 where("academicYear", "==", academicYear),
@@ -205,25 +225,28 @@ const GradesAuditPage = () => {
         const gradeData = currentGrades[pupilID];
         const newGradeValue = updatedGrades[pupilID];
 
+        // The class name is already trimmed since the state is updated with trimmed values
+        const cleanedClass = selectedClass; 
+
         try {
             if (gradeData && newGradeValue === null) {
                 if (!window.confirm(`Delete grade for ${pupilID}?`)) { setSubmitting(false); return; }
-                await deleteDoc(doc(db, "PupilGrades", gradeData.docId));
+                await deleteDoc(doc(schooldb, "PupilGrades", gradeData.docId));
                 alert(`Grade for ${pupilID} deleted`);
             } else if (typeof newGradeValue === 'number' && !isNaN(newGradeValue)) {
                 if (gradeData) {
                     if (!window.confirm(`Update grade for ${pupilID}?`)) { setSubmitting(false); return; }
-                    await setDoc(doc(db, "PupilGrades", gradeData.docId), {
+                    await setDoc(doc(schooldb, "PupilGrades", gradeData.docId), {
                         grade: newGradeValue,
                         lastModifiedByAdmin: serverTimestamp(),
                     }, { merge: true });
                     alert(`Grade for ${pupilID} updated`);
                 } else {
                     if (!window.confirm(`Add new grade for ${pupilID}?`)) { setSubmitting(false); return; }
-                    const docRef = doc(collection(db, "PupilGrades"));
+                    const docRef = doc(collection(schooldb, "PupilGrades"));
                     await setDoc(docRef, {
                         pupilID,
-                        className: selectedClass,
+                        className: cleanedClass, // Write the clean, trimmed value
                         subject: selectedSubject,
                         teacher: "Admin Override",
                         grade: newGradeValue,
@@ -257,7 +280,7 @@ const GradesAuditPage = () => {
         }
     };
 
-    // --- 7️⃣ Download PDF (unchanged, uses currentGrades & updatedGrades) ---
+    // --- 7️⃣ Download PDF (uses state values) ---
     const handleDownloadPDF = () => {
         if (pupils.length === 0) {
             alert("No data to generate PDF");
@@ -282,7 +305,10 @@ const GradesAuditPage = () => {
             const gradeInfo = currentGrades[pupil.studentID];
             const grade = gradeInfo?.grade || "N/A";
             const teacher = gradeInfo?.teacher || "N/A";
+            
+            // Only include pupils that have a grade or a pending update
             if (grade === "N/A" && !updatedGrades.hasOwnProperty(pupil.studentID)) return null;
+            
             const displayGrade = updatedGrades.hasOwnProperty(pupil.studentID) 
                                  ? (updatedGrades[pupil.studentID] === null ? "DELETED" : updatedGrades[pupil.studentID])
                                  : grade;
@@ -301,7 +327,7 @@ const GradesAuditPage = () => {
         doc.save(`Admin_Audit_${selectedClass}_${selectedSubject}_${selectedTest}_Grades.pdf`);
     };
 
-    // --- 8️⃣ Render component (unchanged structure) ---
+    // --- 8️⃣ Render component ---
     return (
         <div className="max-w-7xl mx-auto p-6 bg-white rounded-2xl shadow-xl relative">
             <h2 className="text-3xl font-bold mb-4 text-center text-blue-700">⭐ Admin Grade Audit & Management</h2>
@@ -348,7 +374,11 @@ const GradesAuditPage = () => {
                         {assignments.map((a) => (
                             <button key={a.className}
                                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors shadow-sm ${selectedClass === a.className ? "bg-blue-600 text-white shadow-blue-300" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
-                                onClick={() => { setSelectedClass(a.className); setSelectedSubject(a.subjects[0]); }}>
+                                onClick={() => { 
+                                    // Class name is already trimmed in assignment list (Step 1)
+                                    setSelectedClass(a.className); 
+                                    setSelectedSubject(a.subjects[0]); 
+                                }}>
                                 {a.className}
                             </button>
                         ))}
@@ -427,7 +457,7 @@ const GradesAuditPage = () => {
                                                 <button
                                                     onClick={() => handleAdminAction(pupil.studentID)}
                                                     className={`px-3 py-1 text-xs rounded transition-colors font-semibold ${
-                                                        actionDisabled
+                                                         actionDisabled
                                                             ? "bg-gray-400 cursor-wait"
                                                             : (newGradeValue === null && gradeInfo)
                                                             ? "bg-red-600 hover:bg-red-700 text-white" // Deletion
