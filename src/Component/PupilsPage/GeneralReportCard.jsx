@@ -268,124 +268,202 @@ const GeneralReportCard = () => {
   };
 
   // 🧾 Handle PDF Printing (unchanged)
- const handlePrintPDF = () => {
-    if (!pupilInfo) return;
+// ... (Lines 1 - 417 unchanged)
 
-    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "A4" });
+// 🧾 Handle PDF Printing
+const handlePrintPDF = () => {
+    if (!pupilInfo) return;
 
-    // Pupil photo
-    const pupilPhotoUrl = pupilInfo.userPhotoUrl || "https://via.placeholder.com/96";
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "A4" });
 
-    // Helper to load images (unchanged)
-    const loadImage = (url) =>
-      new Promise((resolve) => {
-        const img = new Image();
-        img.src = url;
-        img.crossOrigin = "anonymous";
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
-      });
+    // Pupil photo
+    const pupilPhotoUrl = pupilInfo.userPhotoUrl || "https://via.placeholder.com/96";
 
-    Promise.all([loadImage(schoolLogoUrl), loadImage(pupilPhotoUrl)]).then(([logo, pupilPhoto]) => {
-      let y = 30;
+    // Helper to load images
+    const loadImage = (url) =>
+        new Promise((resolve) => {
+            const img = new Image();
+            img.src = url;
+            img.crossOrigin = "anonymous";
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+        });
 
-      // 1. School Name (Centered) (unchanged)
-      doc.setFontSize(18).setFont(doc.getFont().fontName, "bold");
-      doc.text(schoolName || "Unknown School", doc.internal.pageSize.getWidth() / 2, y, { align: "center" });
-      y += 5;
+    Promise.all([loadImage(schoolLogoUrl), loadImage(pupilPhotoUrl)]).then(([logo, pupilPhoto]) => {
+        let y = 30;
 
-      doc.setDrawColor(63, 81, 181);
-      doc.line(40, y, doc.internal.pageSize.getWidth() - 40, y);
-      y += 15;
+        // 1. School Name (Centered) (unchanged)
+        doc.setFontSize(18).setFont(doc.getFont().fontName, "bold");
+        doc.text(schoolName || "Unknown School", doc.internal.pageSize.getWidth() / 2, y, { align: "center" });
+        y += 5;
 
-      // 2. School Info & Logos (unchanged)
-      if (logo) doc.addImage(logo, "PNG", 40, y, 50, 50);
+        doc.setDrawColor(63, 81, 181);
+        doc.line(40, y, doc.internal.pageSize.getWidth() - 40, y);
+        y += 15;
 
-      doc.setFontSize(10).setFont(doc.getFont().fontName, "normal");
-      doc.text(schoolAddress || "Address not found", doc.internal.pageSize.getWidth() / 2, y + 5, { align: "center" });
-      doc.text(schoolMotto || "No motto", doc.internal.pageSize.getWidth() / 2, y + 20, { align: "center" });
-      doc.text(schoolContact || "No contact info", doc.internal.pageSize.getWidth() / 2, y + 35, { align: "center" });
-      if (email) doc.text(email, doc.internal.pageSize.getWidth() / 2, y + 50, { align: "center" });
+        // 2. School Info & Logos (unchanged)
+        if (logo) doc.addImage(logo, "PNG", 40, y, 50, 50);
 
-      const rightX = doc.internal.pageSize.getWidth() - 90;
-      if (pupilPhoto) doc.addImage(pupilPhoto, "JPEG", rightX, y, 50, 50);
-      else if (logo) doc.addImage(logo, "PNG", rightX, y, 50, 50);
+        doc.setFontSize(10).setFont(doc.getFont().fontName, "normal");
+        doc.text(schoolAddress || "Address not found", doc.internal.pageSize.getWidth() / 2, y + 5, { align: "center" });
+        doc.text(schoolMotto || "No motto", doc.internal.pageSize.getWidth() / 2, y + 20, { align: "center" });
+        doc.text(schoolContact || "No contact info", doc.internal.pageSize.getWidth() / 2, y + 35, { align: "center" });
+        if (email) doc.text(email, doc.internal.pageSize.getWidth() / 2, y + 50, { align: "center" });
 
-      y += 75;
-      
-      // ⭐️ CHANGE 2: Add extra vertical space before pupil info starts
-      y += 10; 
+        const rightX = doc.internal.pageSize.getWidth() - 90;
+        if (pupilPhoto) doc.addImage(pupilPhoto, "JPEG", rightX, y, 50, 50);
+        else if (logo) doc.addImage(logo, "PNG", rightX, y, 50, 50);
 
-      // 3. Pupil & Class Info (UNCHANGED logic)
-      doc.setFontSize(12).setFont(doc.getFont().fontName, "bold");
-      
-      // First row: Pupil ID and Class with total pupils
-      doc.text(`Pupil ID: ${pupilInfo.studentID}`, 40, y);
-      
-      // ⭐️ CHANGE 1: Combine Class and Total Pupils into one line
-      // NOTE: pupilInfo.class might still be untrimmed, but it's okay for display purposes
-      const classText = `Class: ${pupilInfo.class || "N/A"} (${totalPupilsInClass} pupils)`;
-      doc.text(classText, doc.internal.pageSize.getWidth() / 2 + 10, y);
-      y += 20;
+        y += 75;
+        
+        // ⭐️ Add extra vertical space before pupil info starts
+        y += 10; 
 
-      // Second row: Pupil Name and Academic Year
-      doc.text(`Pupil Name: ${pupilInfo.studentName}`, 40, y);
-      doc.text(`Academic Year: ${academicYear}`, doc.internal.pageSize.getWidth() / 2 + 10, y);
-      y += 25;
-      
-      // 4. Term Header (unchanged)
-      doc.setFontSize(16).setFont(doc.getFont().fontName, "bold");
-      doc.text(selectedTerm, doc.internal.pageSize.getWidth() / 2, y, { align: "center" });
-      y += 20;
+        // 3. Pupil & Class Info (UNCHANGED logic)
+        doc.setFontSize(12).setFont(doc.getFont().fontName, "bold");
+        
+        // First row: Pupil ID and Class with total pupils
+        doc.text(`Pupil ID: ${pupilInfo.studentID}`, 40, y);
+        
+        // Combine Class and Total Pupils into one line
+        const classText = `Class: ${pupilInfo.class || "N/A"}`;
+        doc.text(classText, doc.internal.pageSize.getWidth() / 2 + 10, y);
+        y += 20;
 
-      // 5. Grades Table (unchanged)
-      const tableData = reportRows.map((r) => [r.subject, r.test1, r.test2, r.mean, r.rank]);
-      
-      const pdfHeaders = ["Subject", tests[0].split(' ')[2] || 'T1', tests[1].split(' ')[2] || 'T2', "Mean", "Rank"];
+        // Second row: Pupil Name and Academic Year
+        doc.text(`Pupil Name: ${pupilInfo.studentName}`, 40, y);
+        doc.text(`Academic Year: ${academicYear}`, doc.internal.pageSize.getWidth() / 2 + 10, y);
+        y += 25;
+        
+        // 4. Term Header (unchanged)
+        doc.setFontSize(16).setFont(doc.getFont().fontName, "bold");
+        doc.text(selectedTerm, doc.internal.pageSize.getWidth() / 2, y, { align: "center" });
+        y += 20;
 
-      autoTable(doc, {
-        startY: y,
-        head: [pdfHeaders],
-        body: tableData,
-        theme: "striped",
-        styles: { halign: "center", fontSize: 10 },
-        headStyles: { fillColor: [63, 81, 181], textColor: 255 },
-        margin: { left: 40, right: 40 },
-        columnStyles: { 0: { halign: "left", cellWidth: 150 } },
-        didParseCell: (data) => {
-          const gradeColumns = [1, 2, 3];
-          const rankColumn = 4;
+        // 5. Grades Table (unchanged)
+        const tableData = reportRows.map((r) => [r.subject, r.test1, r.test2, r.mean, r.rank]);
+        
+        const pdfHeaders = ["Subject", tests[0].split(' ')[2] || 'T1', tests[1].split(' ')[2] || 'T2', "Mean", "Rank"];
 
-          if (gradeColumns.includes(data.column.index)) {
-            const grade = Number(data.cell.text[0]);
-            if (grade >= 50) data.cell.styles.textColor = [0, 0, 255];
-            else if (grade <= 49) data.cell.styles.textColor = [255, 0, 0];
-            data.cell.styles.fontStyle = "bold";
-          }
+        autoTable(doc, {
+            startY: y,
+            head: [pdfHeaders],
+            body: tableData,
+            theme: "striped",
+            styles: { halign: "center", fontSize: 10 },
+            headStyles: { fillColor: [63, 81, 181], textColor: 255 },
+            margin: { left: 40, right: 40 },
+            columnStyles: { 0: { halign: "left", cellWidth: 150 } },
+            didParseCell: (data) => {
+                const gradeColumns = [1, 2, 3];
+                const rankColumn = 4;
 
-          if (data.column.index === rankColumn) {
-            data.cell.styles.textColor = [255, 0, 0];
-            data.cell.styles.fontStyle = "bold";
-          }
-        },
-      });
+                if (gradeColumns.includes(data.column.index)) {
+                    const grade = Number(data.cell.text[0]);
+                    if (grade >= 50) data.cell.styles.textColor = [0, 0, 255];
+                    else if (grade <= 49) data.cell.styles.textColor = [255, 0, 0];
+                    data.cell.styles.fontStyle = "bold";
+                }
 
-      // 6. Footer Summary (unchanged)
-      const finalY = doc.lastAutoTable.finalY + 20;
-      doc.setFontSize(12).setFont(doc.getFont().fontName, "bold");
-      doc.text(`Total Marks: ${totalMarks}`, 40, finalY);
-      doc.text(`Percentage: ${overallPercentage}%`, 40, finalY + 15);
-      doc.text(`Overall Position: ${overallRank} / ${totalPupilsInClass}`, 40, finalY + 30);
+                if (data.column.index === rankColumn) {
+                    data.cell.styles.textColor = [255, 0, 0];
+                    data.cell.styles.fontStyle = "bold";
+                }
+            },
+        });
 
-      // Signature (unchanged)
-      doc.setFontSize(10).setFont(doc.getFont().fontName, "normal");
-      doc.text("________________________", 400, finalY + 20);
-      doc.text("Principal's Signature", 400, finalY + 35);
+        // 6. 🏆 Academic Performance Summary Table
+        let currentY = doc.lastAutoTable.finalY + 10;
 
-      // Save PDF (unchanged)
-      doc.save(`${pupilInfo.studentName}_${selectedTerm}_Report.pdf`);
-    });
-  };
+        const academicSummaryData = [
+            ["Total Marks:", totalMarks],
+            ["Percentage:", `${overallPercentage}%`],
+            ["Overall Position:", overallRank],
+        ];
+
+        autoTable(doc, {
+            startY: currentY,
+            body: academicSummaryData,
+            theme: 'plain',
+            styles: { fontSize: 11, fontStyle: 'bold', minCellHeight: 8 },
+            margin: { left: 40, right: doc.internal.pageSize.getWidth() / 2 - 20 }, // Constrain width to left side
+            columnStyles: {
+                0: { halign: 'left', cellWidth: 120 },
+                1: { halign: 'left', cellWidth: 'auto', textColor: [0, 0, 255] }, // Highlight values
+            },
+            didDrawPage: (data) => {
+                currentY = data.cursor.y;
+            }
+        });
+
+        currentY += 10; // Add space after academic summary table
+
+        // 7. 📅 Attendance and Comments Section
+        doc.setFontSize(10).setFont(doc.getFont().fontName, "bold");
+
+        // Attendance Data (placeholders for now)
+        const attendanceData = [
+            ["No. of Sessions:", ""],
+            ["On Time:", ""],
+            ["Late:", ""],
+            ["Absent:", ""],
+        ];
+
+        autoTable(doc, {
+            startY: currentY,
+            body: attendanceData,
+            theme: 'plain',
+            styles: { fontSize: 10, fontStyle: 'bold', cellPadding: 2, minCellHeight: 12 },
+            margin: { left: 40, right: doc.internal.pageSize.getWidth() / 2 - 20 }, // Align with academic summary table
+            columnStyles: {
+                0: { halign: 'left', cellWidth: 100 },
+                1: { halign: 'left', cellWidth: 100, minCellWidth: 50, fontStyle: 'normal', },
+            },
+            didDrawCell: (data) => {
+                // Add an underline for the placeholder attendance value
+                if (data.column.index === 1 && data.cell.section === 'body') {
+                    const lineY = data.cell.y + data.cell.height - 2;
+                    doc.setLineWidth(0.5);
+                    doc.line(data.cell.x, lineY, data.cell.x + data.cell.width, lineY);
+                }
+            },
+            didDrawPage: (data) => {
+                currentY = data.cursor.y;
+            }
+        });
+
+        currentY += 15; // Space before comments
+
+        // Term Comments Header
+        doc.setFontSize(10).setFont(doc.getFont().fontName, "bold");
+        doc.text("Term Comments:", 40, currentY);
+
+        // Drawing lines for comments
+        const commentLineStartX = 120;
+        const lineYStart = currentY + 5;
+        doc.setFont(doc.getFont().fontName, "normal");
+        
+        for(let i = 0; i < 2; i++){
+            doc.setLineWidth(0.5); 
+            doc.line(commentLineStartX, lineYStart + (i * 20), doc.internal.pageSize.getWidth() - 40, lineYStart + (i * 20));
+        }
+
+        currentY = lineYStart + (2 * 15); // Update currentY to after the comment lines
+
+        // Signature 
+        doc.setFontSize(10).setFont(doc.getFont().fontName, "normal");
+        const signatureY = currentY + 20; 
+        
+        // Note: I moved the signature position down slightly to give space after comments
+        doc.text("________________________", 400, signatureY);
+        doc.text("Principal's Signature", 400, signatureY + 15);
+
+        // Save PDF (unchanged)
+        doc.save(`${pupilInfo.studentName}_${selectedTerm}_Report.pdf`);
+    });
+};
+
+// ... (Lines 594 - end unchanged)
 
 
 
@@ -474,9 +552,9 @@ const GeneralReportCard = () => {
             <p className="text-lg font-semibold text-indigo-800">{pupilInfo.studentName}</p>
             <p className="text-gray-600">
               <span className="font-medium">Class:</span> {pupilInfo.class || "N/A"}{" "}
-              <span className="ml-2 text-sm text-gray-500">
+{/*               <span className="ml-2 text-sm text-gray-500">
                 ({totalPupilsInClass} pupils)
-              </span>
+              </span> */}
             </p>
 
             <p className="text-gray-600">
