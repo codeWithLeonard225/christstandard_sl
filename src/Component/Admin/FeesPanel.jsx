@@ -31,6 +31,7 @@ import GradeSheetPage from "../TeacherAssignment/GradeSheetPage";
 import GeneralReportCard from "../PupilsPage/GeneralReportCard";
 import StudentFilterPage from "../Voters/StudentFilterPage";
 import LogoutPage from "../Admin/LogoutPage"
+import FeesReport from "../Admin/FeesReport"
 
 
 // --- Navigation Items ---
@@ -56,6 +57,11 @@ const NAV_ITEMS = [
 
     ],
   },
+   {
+      key: "FeesReport",
+      label: "FeesReport",
+      icon: <MdWarning />, // 📖
+    },
    {
       key: "LogoutPage",
       label: "Logout",
@@ -142,6 +148,7 @@ function FeesPanel() {
       case "TeacherPupilsPage": return <TeacherPupilsPage />;
       case "GradeSheetPage": return <GradeSheetPage />;
       case "GeneralReportCard": return <GeneralReportCard />;
+      case "FeesReport": return <FeesReport />;
        case "LogoutPage": return <LogoutPage />;
 
       default: return <Placeholder title={activeTab} />;

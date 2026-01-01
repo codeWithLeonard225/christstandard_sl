@@ -6,7 +6,12 @@ import TeacherGradesPage from "./TeacherPupilsPage";
 import TeacherQuestionsPageObjectives from "./TeacherQuestionsPageObjectives";
 import TeacherQuestionsPageTheory from "./TeacherQuestionsPageTheory";
 import TeacherAssignmentPage from "./TeacherAssignmentTheory";
+
 import LogoutPage from "../Admin/LogoutPage"
+import StaffSelfAttendanceReport from "./StaffAttendanceReport";
+import TeacherTimetableReport from "./TimeTableTeacherReport";
+import TeacherTimetableAtt from "./TeacherTimetableAtt";
+
 
 
 // Navigation Items
@@ -17,7 +22,7 @@ const NAV_ITEMS = [
     icon: <MdAttachMoney />,
   },
 
-  
+
 
   {
     key: "TeacherQuestionsPage ",
@@ -30,6 +35,16 @@ const NAV_ITEMS = [
       // { key: "Quiz", label: "Test Yourself (Quiz)" },
       // { key: "syllabus", label: "Study syllabus" },
     ],
+  },
+  {
+    key: "Timetable",
+    label: "Timetable",
+    icon: <MdMenuBook />, // 📖
+  },
+  {
+    key: "TimetableAttendance",
+    label: "Timetable Attendance",
+    icon: <MdMenuBook />, // 📖
   },
   {
     key: "LogoutPage",
@@ -118,7 +133,7 @@ function TeacherDashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
-        return <Dashboard />;
+        return <StaffSelfAttendanceReport />;
       case "grades":
         return <TeacherGradesPage />;
       case "objectives":
@@ -127,7 +142,11 @@ function TeacherDashboard() {
         return <TeacherQuestionsPageTheory />;
       case "assignment":
         return <TeacherAssignmentPage />;
-    
+      case "Timetable":
+        return <TeacherTimetableReport />;
+      case "TimetableAttendance":
+        return <TeacherTimetableAtt />;
+
       case "LogoutPage":
         return <LogoutPage />;
 

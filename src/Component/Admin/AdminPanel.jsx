@@ -47,6 +47,7 @@ import StaffAttendance from "../TeacherAssignment/StaffAttendance";
 import CopyPupilGrades from "../Voters/CopyPupilGrades"
 import FixClassNames from "../Voters/FixClassNames"
 import TimetableEntry from "../TeacherAssignment/TimetableEntry";
+import WeeklyTimetableReport from "../TeacherAssignment/WeeklyTimetableReport";
 import TimeTableTeacherAtt from "../TeacherAssignment/TimeTableTeacherAtt";
 import TimeTableDailyAttendanceReport from "../TeacherAssignment/TimeTableDailyAttendanceReport";
 import TimeTableTeacherReport from "../TeacherAssignment/TimeTableTeacherReport";
@@ -142,6 +143,7 @@ const NAV_ITEMS = [
     icon: <MdBarChart />,
     children: [
       { key: "TimetableEntry", label: "TimetableEntry", icon: <MdPerson /> },
+      { key: "WeeklyTimetableReport", label: "WeeklyTimetableReport", icon: <MdPerson /> },
       { key: "TimeTableTeacherAtt", label: "TimeTableTeacherAtt", icon: <MdPerson /> },
       { key: "TimeTableDailyAttendanceReport", label: "DailyAttendanceReport", icon: <MdPerson /> },
       { key: "TimeTableTeacherReport", label: "TimeTableTeacherReport", icon: <MdPerson /> },
@@ -253,6 +255,7 @@ function AdminPanel() {
       case "pupilAttendance": return <AttendancePage />;
       case "staffAttendance": return <StaffAttendance />;
       case "TimetableEntry": return <TimetableEntry />;
+      case "WeeklyTimetableReport": return <WeeklyTimetableReport />;
       case "TimeTableTeacherAtt": return <TimeTableTeacherAtt />;
       case "TimeTableDailyAttendanceReport": return <TimeTableDailyAttendanceReport />;
       case "TimeTableTeacherReport": return <TimeTableTeacherReport />;
