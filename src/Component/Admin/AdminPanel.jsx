@@ -146,7 +146,7 @@ const NAV_ITEMS = [
       { key: "WeeklyTimetableReport", label: "WeeklyTimetableReport", icon: <MdPerson /> },
       { key: "TimeTableTeacherAtt", label: "TimeTableTeacherAtt", icon: <MdPerson /> },
       { key: "TimeTableDailyAttendanceReport", label: "DailyAttendanceReport", icon: <MdPerson /> },
-      { key: "TimeTableTeacherReport", label: "TimeTableTeacherReport", icon: <MdPerson /> },
+      { key: "TimeTableTeacherReport", label: "MonthlyTimeTableReport", icon: <MdPerson /> },
 
     ],
   },
