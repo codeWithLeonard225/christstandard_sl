@@ -42,6 +42,7 @@ import PastQuestions from "../Admin/PastQuestionUpload";
 import PupilIDCard from "../Voters/PupilIDCard";
 import IDCardPage from "../Voters/IDCardPage";
 import LogoutPage from "../Admin/LogoutPage"
+import FeesResult from "../Admin/FeesResult"
 import AttendancePage from "../Voters/AttendancePage"
 import StaffAttendance from "../TeacherAssignment/StaffAttendance";
 import CopyPupilGrades from "../Voters/CopyPupilGrades"
@@ -71,6 +72,7 @@ const NAV_ITEMS = [
     children: [
       { key: "fees", label: " PupilsFees", icon: <MdPerson /> },
       { key: "feesCost", label: " feesUpdate", icon: <MdPerson /> },
+      { key: "FeesResult", label: " FeesResult", icon: <MdPerson /> },
     ],
   },
   {
@@ -235,6 +237,7 @@ function AdminPanel() {
       case "class": return <ClassRegistration />;
       case "classList": return <StudentFilterPage />;
       case "fees": return <FeeReceipt />;
+      case "FeesResult": return <FeesResult />;
       case "feesCost": return <FeesCostPage />;
       case "TeacherRegistration": return <TeacherRegistration />;
       case "subjects": return <SubjectPage />;
