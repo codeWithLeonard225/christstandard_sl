@@ -20,6 +20,7 @@ import {
 } from "react-icons/md";
 import Registration from "../Voters/Registration";
 import ClassRegistration from "./ClassRegistration";
+import BankFeesPage from "./BankFeesPage";
 import FeeReceipt from "../FeeReceipt.jsx/FeeReceipt";
 import FeesCostPage from "../FeeReceipt.jsx/FeesCostPage";
 import FeesDashboard from "../Dashboard/FeesDsahboard";
@@ -153,6 +154,11 @@ const NAV_ITEMS = [
     ],
   },
    {
+    key: "BankFeesPage",
+    label: "Bank Report",
+    icon: <MdWarning />, // 📖
+  },
+   {
     key: "LogoutPage",
     label: "Logout",
     icon: <MdWarning />, // 📖
@@ -232,7 +238,7 @@ function AdminPanel() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case "dashboard": return <RegDashboard />;
+      case "dashboard": return <FeesDashboard />;
       case "Form": return <Registration />;
       case "class": return <ClassRegistration />;
       case "classList": return <StudentFilterPage />;
@@ -264,6 +270,7 @@ function AdminPanel() {
       case "TimeTableTeacherReport": return <TimeTableTeacherReport />;
       case "CopyPupilGrades": return <CopyPupilGrades />;
       case "FixClassNames": return <FixClassNames />;
+      case "BankFeesPage": return <BankFeesPage />;
 
       default: return <Placeholder title={activeTab} />;
     }
