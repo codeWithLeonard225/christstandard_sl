@@ -53,6 +53,9 @@ import WeeklyTimetableReport from "../TeacherAssignment/WeeklyTimetableReport";
 import TimeTableTeacherAtt from "../TeacherAssignment/TimeTableTeacherAtt";
 import TimeTableDailyAttendanceReport from "../TeacherAssignment/TimeTableDailyAttendanceReport";
 import TimeTableTeacherReport from "../TeacherAssignment/TimeTableTeacherReport";
+import YearlyResult from "../TeacherAssignment/YearlyResult";
+import TermResult from "../TeacherAssignment/TermResult";
+import YearlyGeneralReportCard from "../TeacherAssignment/YearlyGeneralReportCard";
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
@@ -100,6 +103,9 @@ const NAV_ITEMS = [
       { key: "SubGradeMatrixPage", label: "Sub Grade Sheet", icon: <MdPerson /> },
       { key: "ClassFullTermMatrixPage", label: "Term Grade Sheet", icon: <MdPerson /> },
       { key: "GeneralReportCard", label: "ReportCard", icon: <MdPerson /> },
+      { key: "TermResult", label: "Term Result", icon: <MdPerson /> },
+      { key: "YearlyResult", label: "Yearly Result", icon: <MdPerson /> },
+      // { key: "YearlyGeneralReportCard", label: "YearlyGeneralReportCard", icon: <MdPerson /> },
       // { key: "Testing", label: "Testing", icon: <MdPerson /> },
 
     ],
@@ -255,6 +261,9 @@ function AdminPanel() {
       case "beceResult": return <NationalResultPage />;
       case "beceReport": return <BECEStatementOfResult />;
       case "GeneralReportCard": return <GeneralReportCard />;
+      case "TermResult": return <TermResult />;
+      case "YearlyResult": return <YearlyResult />;
+      case "YearlyGeneralReportCard": return <YearlyGeneralReportCard />;
       case "TeacherPupilsPageAdmin": return <TeacherGradesPage />;
       case "TeacherAssignmentReport": return <TeacherAssignmentReport />;
       case "PastQuestions": return <PastQuestions />;
