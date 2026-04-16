@@ -17,7 +17,15 @@ const AnnualBroadSheet = () => {
   const [loading, setLoading] = useState(false);
 
   const location = useLocation();
-  const { schoolId, schoolName } = location.state || {};
+  const {
+    schoolId,
+    schoolName,
+    schoolLogoUrl,
+    schoolAddress,
+    schoolMotto,
+    schoolContact,
+    email,
+  } = location.state || {};
 
   // 1. Fetch Metadata
   useEffect(() => {
@@ -62,7 +70,7 @@ const AnnualBroadSheet = () => {
     return () => unsubscribe();
   }, [academicYear, selectedClass]);
 
-// 4. Main Calculation Engine
+  // 4. Main Calculation Engine
   const annualData = useMemo(() => {
     if (classGradesData.length === 0 || pupils.length === 0) return { rows: [], footers: {} };
 
@@ -72,11 +80,10 @@ const AnnualBroadSheet = () => {
     const getScore = (pId, sub, test) => 
       Number(classGradesData.find(g => g.pupilID === pId && g.subject === sub && g.test === test)?.grade || 0);
 
-    // Helper to calculate subject ranks for all students in a specific term
     const getSubjectTermRankMap = (sub, termPrefix) => {
       const scores = studentIDs.map(id => {
         const m = (getScore(id, sub, `${termPrefix} T1`) + getScore(id, sub, `${termPrefix} T2`)) / 2;
-        return { id, mean: m };
+        return { id, mean: Math.round(m) };
       }).sort((a, b) => b.mean - a.mean);
 
       const ranks = {};
@@ -87,21 +94,19 @@ const AnnualBroadSheet = () => {
       return ranks;
     };
 
-    // Pre-calculate ranks for each term and subject
     const termRanks = {
       t1: subjects.reduce((acc, sub) => ({ ...acc, [sub]: getSubjectTermRankMap(sub, "Term 1") }), {}),
       t2: subjects.reduce((acc, sub) => ({ ...acc, [sub]: getSubjectTermRankMap(sub, "Term 2") }), {}),
       t3: subjects.reduce((acc, sub) => ({ ...acc, [sub]: getSubjectTermRankMap(sub, "Term 3") }), {}),
     };
 
-    // Subject-Specific Rankings for the Year (Annual)
     const subjectYearlyRanks = {};
     subjects.forEach(sub => {
       const subjectScores = studentIDs.map(id => {
-        const m1 = (getScore(id, sub, "Term 1 T1") + getScore(id, sub, "Term 1 T2")) / 2;
-        const m2 = (getScore(id, sub, "Term 2 T1") + getScore(id, sub, "Term 2 T2")) / 2;
-        const m3 = (getScore(id, sub, "Term 3 T1") + getScore(id, sub, "Term 3 T2")) / 2;
-        return { id, yearlyMean: (m1 + m2 + m3) / 3 };
+        const m1 = Math.round((getScore(id, sub, "Term 1 T1") + getScore(id, sub, "Term 1 T2")) / 2);
+        const m2 = Math.round((getScore(id, sub, "Term 2 T1") + getScore(id, sub, "Term 2 T2")) / 2);
+        const m3 = Math.round((getScore(id, sub, "Term 3 T1") + getScore(id, sub, "Term 3 T2")) / 2);
+        return { id, yearlyMean: Math.round((m1 + m2 + m3) / 3) };
       }).sort((a, b) => b.yearlyMean - a.yearlyMean);
 
       subjectScores.forEach((s, idx) => {
@@ -111,26 +116,25 @@ const AnnualBroadSheet = () => {
       subjectYearlyRanks[sub] = subjectScores;
     });
 
-    // Overall Student Stats for Footers
     const allStudentsStats = studentIDs.map(id => {
       let t1 = 0, t2 = 0, t3 = 0;
       subjects.forEach(sub => {
-        t1 += (getScore(id, sub, "Term 1 T1") + getScore(id, sub, "Term 1 T2")) / 2;
-        t2 += (getScore(id, sub, "Term 2 T1") + getScore(id, sub, "Term 2 T2")) / 2;
-        t3 += (getScore(id, sub, "Term 3 T1") + getScore(id, sub, "Term 3 T2")) / 2;
+        t1 += Math.round((getScore(id, sub, "Term 1 T1") + getScore(id, sub, "Term 1 T2")) / 2);
+        t2 += Math.round((getScore(id, sub, "Term 2 T1") + getScore(id, sub, "Term 2 T2")) / 2);
+        t3 += Math.round((getScore(id, sub, "Term 3 T1") + getScore(id, sub, "Term 3 T2")) / 2);
       });
-      return { id, t1, t2, t3, annual: (t1 + t2 + t3) / 3 };
+      return { id, t1, t2, t3, annual: Math.round((t1 + t2 + t3) / 3) };
     });
 
     const activePupilStats = allStudentsStats.find(s => s.id === selectedPupil) || { t1: 0, t2: 0, t3: 0, annual: 0 };
 
     const footers = {
-      totals: { t1: Math.round(activePupilStats.t1), t2: Math.round(activePupilStats.t2), t3: Math.round(activePupilStats.t3), ann: Math.round(activePupilStats.annual) },
+      totals: { t1: activePupilStats.t1, t2: activePupilStats.t2, t3: activePupilStats.t3, ann: activePupilStats.annual },
       percents: {
-        t1: subjects.length ? (activePupilStats.t1 / subjects.length).toFixed(1) : 0,
-        t2: subjects.length ? (activePupilStats.t2 / subjects.length).toFixed(1) : 0,
-        t3: subjects.length ? (activePupilStats.t3 / subjects.length).toFixed(1) : 0,
-        ann: subjects.length ? (activePupilStats.annual / subjects.length).toFixed(1) : 0
+        t1: subjects.length ? Math.round(activePupilStats.t1 / subjects.length) : 0,
+        t2: subjects.length ? Math.round(activePupilStats.t2 / subjects.length) : 0,
+        t3: subjects.length ? Math.round(activePupilStats.t3 / subjects.length) : 0,
+        ann: subjects.length ? Math.round(activePupilStats.annual / subjects.length) : 0
       },
       ranks: {
         t1: [...allStudentsStats].sort((a,b)=>b.t1-a.t1).findIndex(s=>s.id === selectedPupil)+1,
@@ -142,9 +146,9 @@ const AnnualBroadSheet = () => {
 
     const rows = subjects.map(sub => {
       const g = (t) => getScore(selectedPupil, sub, t);
-      const m1 = (g("Term 1 T1") + g("Term 1 T2")) / 2;
-      const m2 = (g("Term 2 T1") + g("Term 2 T2")) / 2;
-      const m3 = (g("Term 3 T1") + g("Term 3 T2")) / 2;
+      const m1 = Math.round((g("Term 1 T1") + g("Term 1 T2")) / 2);
+      const m2 = Math.round((g("Term 2 T1") + g("Term 2 T2")) / 2);
+      const m3 = Math.round((g("Term 3 T1") + g("Term 3 T2")) / 2);
       
       return { 
         sub, 
@@ -161,107 +165,191 @@ const AnnualBroadSheet = () => {
 
   const pupilInfo = pupils.find(p => p.studentID === selectedPupil);
 
-  // 5. PDF Generator
- const handlePrintPDF = () => {
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a3" });
+// 5. PDF Generator Updated
+// 5. PDF Generator Updated with Far-Left and Far-Right alignment
+const handlePrintPDF = () => {
+  if (!pupilInfo) return;
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "A4" });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 40; // Consistent margin for both sides
+  const rightBoundary = pageWidth - margin;
 
-  // 1. Header Section
-  doc.setFontSize(22).setFont(undefined, 'bold');
-  doc.text(schoolName?.toUpperCase() || "SCHOOL REPORT", pageWidth / 2, 40, { align: "center" });
-  
-  doc.setFontSize(16).setFont(undefined, 'bold');
-  doc.text("ANNUAL PROGRESS BROAD SHEET", pageWidth / 2, 65, { align: "center" });
+  const pupilPhotoUrl = pupilInfo.userPhotoUrl || "https://via.placeholder.com/96";
 
-  doc.setFontSize(12).setFont(undefined, 'normal');
-  doc.text(
-    `PUPIL: ${pupilInfo?.studentName}  |  CLASS: ${selectedClass}  |  YEAR: ${academicYear}`,
-    pageWidth / 2, 85, { align: "center" }
-  );
+  const loadImage = (url) =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.src = url;
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+    });
 
-  // 2. Define Headers (matching your 4-column-per-term UI)
-  const headGroup = [
-    { content: 'SUBJECTS', rowSpan: 2, styles: { valign: 'middle', halign: 'left' } },
-    { content: 'TERM 1', colSpan: 4, styles: { halign: 'center', fillColor: [49, 46, 129] } },
-    { content: 'TERM 2', colSpan: 4, styles: { halign: 'center', fillColor: [30, 58, 138] } },
-    { content: 'TERM 3', colSpan: 4, styles: { halign: 'center', fillColor: [22, 78, 99] } },
-    { content: 'YEARLY', colSpan: 1, styles: { halign: 'center', fillColor: [6, 78, 59] } }
-  ];
+  Promise.all([loadImage(schoolLogoUrl), loadImage(pupilPhotoUrl)]).then(([logo, pupilPhoto]) => {
+    let y = 30;
 
-  const headSub = [
-    "T1", "T2", "Mn", "Rk", 
-    "T1", "T2", "Mn", "Rk", 
-    "T1", "T2", "Mn", "Rk", 
-    "Mean"
-  ];
+    // --- SCHOOL HEADER ---
+    doc.setFontSize(18).setFont(undefined, "bold");
+    doc.text(schoolName || "SCHOOL NAME", pageWidth / 2, y, { align: "center" });
+    y += 5;
 
-  // 3. Prepare Body Data
-  // Note: To get ranks for individual terms (T1, T2, T3), you would ideally 
-  // calculate them in your useMemo. Here I use "-" as a placeholder for term-ranks 
-  // if they aren't in your 'r' object, but I've included r.annRank for the final column.
-  const body = annualData.rows.map(r => [
-    r.sub,
-    r.t1_1, r.t1_2, r.m1, "-", // Term 1 scores + Placeholder Rank
-    r.t2_1, r.t2_2, r.m2, "-", // Term 2 scores + Placeholder Rank
-    r.t3_1, r.t3_2, r.m3, "-", // Term 3 scores + Placeholder Rank
-    { content: r.ann, styles: { fontStyle: 'bold', fillColor: [236, 253, 245] } }
-  ]);
+    doc.setDrawColor(63, 81, 181);
+    doc.line(margin, y, rightBoundary, y);
+    y += 15;
 
-  // 4. Prepare Footers
- const footers = [
-  [
-    { content: "TOTAL MARKS", styles: { halign: 'right', fontStyle: 'bold' } },
-    { content: annualData.footers.totals.t1, colSpan: 4 },
-    { content: annualData.footers.totals.t2, colSpan: 4 },
-    { content: annualData.footers.totals.t3, colSpan: 4 },
-    { content: annualData.footers.totals.ann, colSpan: 1, styles: { fillColor: [209, 250, 229] } }
-  ],
-  [
-    { content: "CLASS RANK", styles: { halign: 'right', fontStyle: 'bold', fillColor: [15, 23, 42], textColor: [255, 255, 255] } },
-    { content: annualData.footers.ranks.t1, colSpan: 4, styles: { fillColor: [15, 23, 42], textColor: [250, 204, 21], fontSize: 12 } },
-    { content: annualData.footers.ranks.t2, colSpan: 4, styles: { fillColor: [15, 23, 42], textColor: [250, 204, 21], fontSize: 12 } },
-    { content: annualData.footers.ranks.t3, colSpan: 4, styles: { fillColor: [15, 23, 42], textColor: [250, 204, 21], fontSize: 12 } },
-    { content: "Rank: " + annualData.footers.ranks.ann, colSpan: 1, styles: { fillColor: [185, 28, 28], textColor: [255, 255, 255], fontSize: 14 } }
-  ]
-];
-
-  // 5. Generate Table
-  autoTable(doc, {
-    startY: 100,
-    head: [headGroup, headSub],
-    body: body,
-    foot: footers,
-    theme: 'grid',
-    styles: {
-      halign: 'center',
-      fontSize: 9,
-      cellPadding: 4,
-      lineColor: [200, 200, 200],
-      lineWidth: 0.5
-    },
-    headStyles: {
-      fillColor: [30, 41, 59],
-      textColor: [255, 255, 255],
-      fontStyle: 'bold'
-    },
-    columnStyles: {
-      0: { halign: 'left', fontStyle: 'bold', cellWidth: 120, fillColor: [248, 250, 252] },
-      // Subject Ranks (Columns 4, 8, 12)
-      4: { textColor: [185, 28, 28], fontStyle: 'bold' },
-      8: { textColor: [185, 28, 28], fontStyle: 'bold' },
-      12: { textColor: [185, 28, 28], fontStyle: 'bold' }
-    },
-    didParseCell: (data) => {
-      // Highlight the Mean columns for each term (3, 7, 11)
-      if (data.section === 'body' && [3, 7, 11].includes(data.column.index)) {
-        data.cell.styles.fillColor = [241, 245, 249];
-        data.cell.styles.fontStyle = 'bold';
-      }
+    if (logo) {
+      doc.addImage(logo, "PNG", margin, y, 50, 50);
+      // Removed the duplicate right logo to leave space for Pupil Photo
     }
-  });
 
-  doc.save(`${pupilInfo?.studentName}_Annual_Report.pdf`);
+    doc.setFontSize(10).setFont(undefined, "normal");
+    doc.text(schoolAddress || "Address not found", pageWidth / 2, y + 5, { align: "center" });
+    doc.text(schoolMotto || "No motto", pageWidth / 2, y + 20, { align: "center" });
+    doc.text(schoolContact || "No contact", pageWidth / 2, y + 35, { align: "center" });
+    if (email) doc.text(email, pageWidth / 2, y + 50, { align: "center" });
+
+    if (pupilPhoto) {
+      doc.addImage(pupilPhoto, "JPEG", rightBoundary - 50, y, 50, 50);
+    }
+
+    y += 85;
+
+    // --- TITLE ---
+    doc.setFontSize(14).setFont(undefined, "bold");
+    doc.text("ANNUAL PROGRESS BROAD SHEET", pageWidth / 2, y, { align: "center" });
+    y += 30;
+
+    // --- PUPIL INFO (Far-Left & Far-Right Alignment) ---
+    doc.setFontSize(11).setFont(undefined, "bold");
+    
+    // Line 1: ID on Left, Class on Right
+    doc.text(`Pupil ID: ${pupilInfo.studentID}`, margin, y);
+    doc.text(`Class: ${selectedClass}`, rightBoundary, y, { align: "right" });
+    
+    y += 20;
+    
+    // Line 2: Name on Left, Year on Right
+    doc.text(`Pupil Name: ${pupilInfo.studentName}`, margin, y);
+    doc.text(`Academic Year: ${academicYear}`, rightBoundary, y, { align: "right" });
+    
+    y += 25;
+
+    // --- TABLE GENERATION ---
+    const headGroup = [
+      [
+        { content: 'SUBJECTS', rowSpan: 2 },
+        { content: 'TERM 1', colSpan: 4 },
+        { content: 'TERM 2', colSpan: 4 },
+        { content: 'TERM 3', colSpan: 4 },
+        { content: 'YEARLY PROGRESS', colSpan: 2 }
+      ],
+      [
+        "T1","T2","Mn","Rk",
+        "T1","T2","Mn","Rk",
+        "T1","T2","Mn","Rk",
+        "Mean", "Rnk"
+      ]
+    ];
+
+    const body = annualData.rows.map(r => [
+      r.sub,
+      r.t1_1, r.t1_2, r.m1, r.r1,
+      r.t2_1, r.t2_2, r.m2, r.r2,
+      r.t3_1, r.t3_2, r.m3, r.r3,
+      r.ann, r.annRank
+    ]);
+
+    const foot = [
+      [
+        "TOTALS",
+        { content: annualData.footers.totals.t1, colSpan: 4 },
+        { content: annualData.footers.totals.t2, colSpan: 4 },
+        { content: annualData.footers.totals.t3, colSpan: 4 },
+        { content: annualData.footers.totals.ann, colSpan: 2 }
+      ],
+      [
+        "PERCENTAGE",
+        { content: `${annualData.footers.percents.t1}%`, colSpan: 4 },
+        { content: `${annualData.footers.percents.t2}%`, colSpan: 4 },
+        { content: `${annualData.footers.percents.t3}%`, colSpan: 4 },
+        { content: `${annualData.footers.percents.ann}%`, colSpan: 2 }
+      ],
+      [
+        "CLASS RANK",
+        { content: annualData.footers.ranks.t1, colSpan: 4 },
+        { content: annualData.footers.ranks.t2, colSpan: 4 },
+        { content: annualData.footers.ranks.t3, colSpan: 4 },
+        { content: annualData.footers.ranks.ann, colSpan: 2 }
+      ]
+    ];
+
+     autoTable(doc, {
+      startY: y,
+      head: headGroup,
+      body: body,
+      foot: foot,
+      theme: "grid",
+      styles: { 
+        fontSize: 8.5, // Increased from 7 for better readability
+        halign: "center", 
+        cellPadding: 4, // Added more padding for spacing
+        fontStyle: 'bold' 
+      },
+      headStyles: { 
+        fillColor: [30, 41, 59], 
+        textColor: [255, 255, 255],
+        fontSize: 9
+      },
+      footStyles: { 
+        fillColor: [241, 245, 249], 
+        textColor: [0, 0, 0], 
+        fontSize: 9,
+        fontStyle: 'bold' 
+      },
+      columnStyles: { 
+        0: { halign: "left", cellWidth: 120 } // Wider subject column
+      },
+      didParseCell: function (data) {
+        const scoreCols = [1, 2, 3, 5, 6, 7, 9, 10, 11, 13]; 
+        const rankCols = [4, 8, 12, 14];
+
+        if (data.section === 'body') {
+          if (scoreCols.includes(data.column.index)) {
+            const val = parseFloat(data.cell.raw);
+            if (!isNaN(val)) {
+              data.cell.styles.textColor = val < 50 ? [220, 38, 38] : [37, 99, 235];
+            }
+          }
+          if (rankCols.includes(data.column.index)) {
+            data.cell.styles.textColor = [220, 38, 38];
+          }
+        }
+      }
+    });
+
+    // --- SIGNATURES ---
+    let finalY = doc.lastAutoTable.finalY + 50;
+    doc.setFontSize(10).setFont(undefined, "normal");
+    
+    // Left Signature
+    doc.text("__________________________", margin, finalY);
+    doc.text("Class Teacher's Signature", margin, finalY + 15);
+    
+    // Right Signature
+    doc.text("__________________________", rightBoundary, finalY, { align: "right" });
+    doc.text("Principal's Signature", rightBoundary, finalY + 15, { align: "right" });
+
+    
+
+    doc.save(`${pupilInfo.studentName}_Annual_Report.pdf`);
+  });
 };
+  const ScoreCell = ({ val }) => (
+    <td className={`p-1 border-r font-bold ${val < 50 ? 'text-red-600' : 'text-blue-600'}`}>
+      {val}
+    </td>
+  );
 
   return (
     <div className="p-4 bg-slate-100 min-h-screen">
@@ -290,33 +378,36 @@ const AnnualBroadSheet = () => {
 
             <div className="overflow-x-auto border-2 rounded-2xl shadow-sm">
               <table className="w-full text-center border-collapse text-xs">
-               <thead className="bg-slate-800 text-white">
-  <tr>
-    <th rowSpan="2" className="p-3 text-left border-r min-w-[160px]">SUBJECTS</th>
-    <th colSpan="4" className="p-2 border-b border-r bg-indigo-900/40">TERM 1</th>
-    <th colSpan="4" className="p-2 border-b border-r bg-blue-900/40">TERM 2</th>
-    <th colSpan="4" className="p-2 border-b border-r bg-cyan-900/40">TERM 3</th>
-    <th colSpan="2" className="p-2 bg-emerald-800">YEARLY PROGRESS</th>
-  </tr>
-  <tr className="bg-slate-700 text-[9px] uppercase tracking-tighter">
-    <th className="p-2 border-r">T1</th><th className="p-2 border-r">T2</th><th className="p-2 border-r">Mn</th><th className="p-2 border-r text-red-400">Rk</th>
-    <th className="p-2 border-r">T1</th><th className="p-2 border-r">T2</th><th className="p-2 border-r">Mn</th><th className="p-2 border-r text-red-400">Rk</th>
-    <th className="p-2 border-r">T1</th><th className="p-2 border-r">T2</th><th className="p-2 border-r">Mn</th><th className="p-2 border-r text-red-400">Rk</th>
-    <th className="p-2 border-r bg-emerald-700">Mean</th><th className="p-2 bg-emerald-900">Rnk</th>
-  </tr>
-</thead>
-<tbody className="divide-y font-medium text-slate-600">
-  {annualData.rows.map((r, i) => (
-    <tr key={i} className="hover:bg-indigo-50 transition-colors">
-      <td className="p-2 text-left font-bold border-r bg-slate-50 text-slate-900">{r.sub}</td>
-      <td className="p-1 border-r">{r.t1_1}</td><td className="p-1 border-r">{r.t1_2}</td><td className="p-1 border-r font-bold bg-indigo-50/30">{r.m1}</td><td className="p-1 border-r text-red-600 font-bold">{r.r1}</td>
-      <td className="p-1 border-r">{r.t2_1}</td><td colspan="1" className="p-1 border-r">{r.t2_2}</td><td className="p-1 border-r font-bold bg-blue-50/30">{r.m2}</td><td className="p-1 border-r text-red-600 font-bold">{r.r2}</td>
-      <td className="p-1 border-r">{r.t3_1}</td><td className="p-1 border-r">{r.t3_2}</td><td className="p-1 border-r font-bold bg-cyan-50/30">{r.m3}</td><td className="p-1 border-r text-red-600 font-bold">{r.r3}</td>
-      <td className="p-2 bg-emerald-50 font-black text-emerald-800 text-sm border-r">{r.ann}</td>
-      <td className="p-2 bg-red-50 font-black text-red-600 text-sm">{r.annRank}</td>
-    </tr>
-  ))}
-</tbody>
+                <thead className="bg-slate-800 text-white">
+                  <tr>
+                    <th rowSpan="2" className="p-3 text-left border-r min-w-[160px]">SUBJECTS</th>
+                    <th colSpan="4" className="p-2 border-b border-r bg-indigo-900/40">TERM 1</th>
+                    <th colSpan="4" className="p-2 border-b border-r bg-blue-900/40">TERM 2</th>
+                    <th colSpan="4" className="p-2 border-b border-r bg-cyan-900/40">TERM 3</th>
+                    <th colSpan="2" className="p-2 bg-emerald-800">YEARLY PROGRESS</th>
+                  </tr>
+                  <tr className="bg-slate-700 text-[9px] uppercase tracking-tighter">
+                    <th className="p-2 border-r">T1</th><th className="p-2 border-r">T2</th><th className="p-2 border-r">Mn</th><th className="p-2 border-r text-red-400">Rk</th>
+                    <th className="p-2 border-r">T1</th><th className="p-2 border-r">T2</th><th className="p-2 border-r">Mn</th><th className="p-2 border-r text-red-400">Rk</th>
+                    <th className="p-2 border-r">T1</th><th className="p-2 border-r">T2</th><th className="p-2 border-r">Mn</th><th className="p-2 border-r text-red-400">Rk</th>
+                    <th className="p-2 border-r bg-emerald-700">Mean</th><th className="p-2 bg-emerald-900">Rnk</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y font-medium text-slate-600">
+                  {annualData.rows.map((r, i) => (
+                    <tr key={i} className="hover:bg-indigo-50 transition-colors">
+                      <td className="p-2 text-left font-bold border-r bg-slate-50 text-slate-900">{r.sub}</td>
+                      <ScoreCell val={r.t1_1} /><ScoreCell val={r.t1_2} />
+                      <td className="p-1 border-r font-bold bg-indigo-50/30">{r.m1}</td><td className="p-1 border-r text-red-600 font-bold">{r.r1}</td>
+                      <ScoreCell val={r.t2_1} /><ScoreCell val={r.t2_2} />
+                      <td className="p-1 border-r font-bold bg-blue-50/30">{r.m2}</td><td className="p-1 border-r text-red-600 font-bold">{r.r2}</td>
+                      <ScoreCell val={r.t3_1} /><ScoreCell val={r.t3_2} />
+                      <td className="p-1 border-r font-bold bg-cyan-50/30">{r.m3}</td><td className="p-1 border-r text-red-600 font-bold">{r.r3}</td>
+                      <td className="p-2 bg-emerald-50 font-black text-emerald-800 text-sm border-r">{r.ann}</td>
+                      <td className="p-2 bg-red-50 font-black text-red-600 text-sm">{r.annRank}</td>
+                    </tr>
+                  ))}
+                </tbody>
                 <tfoot className="bg-slate-100 border-t-4 border-slate-800 font-bold">
                   <tr>
                     <td className="p-3 text-right text-slate-500 uppercase">Totals</td>
@@ -325,12 +416,12 @@ const AnnualBroadSheet = () => {
                     <td colSpan="4" className="border-r text-cyan-800">{annualData.footers.totals.t3}</td>
                     <td colSpan="2" className="bg-emerald-100 text-emerald-900 text-lg">{annualData.footers.totals.ann}</td>
                   </tr>
-                    <tr>
+                  <tr>
                     <td className="p-3 text-right text-slate-500">PERCENTAGE:</td>
                     <td colSpan="4" className="border-r">{annualData.footers.percents.t1}%</td>
                     <td colSpan="4" className="border-r">{annualData.footers.percents.t2}%</td>
                     <td colSpan="4" className="border-r">{annualData.footers.percents.t3}%</td>
-                    <td className="bg-emerald-100">{annualData.footers.percents.ann}%</td>
+                    <td colSpan="2" className="bg-emerald-100">{annualData.footers.percents.ann}%</td>
                   </tr>
                   <tr className="bg-slate-900 text-white">
                     <td className="p-4 text-right text-indigo-300 tracking-widest uppercase">Class Rank</td>

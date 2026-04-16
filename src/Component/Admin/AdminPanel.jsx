@@ -105,7 +105,7 @@ const NAV_ITEMS = [
       { key: "GeneralReportCard", label: "ReportCard", icon: <MdPerson /> },
       { key: "TermResult", label: "Term Result", icon: <MdPerson /> },
       { key: "YearlyResult", label: "Yearly Result", icon: <MdPerson /> },
-      // { key: "YearlyGeneralReportCard", label: "YearlyGeneralReportCard", icon: <MdPerson /> },
+      { key: "YearlyGeneralReportCard", label: "YearlyGeneralReportCard", icon: <MdPerson /> },
       // { key: "Testing", label: "Testing", icon: <MdPerson /> },
 
     ],
