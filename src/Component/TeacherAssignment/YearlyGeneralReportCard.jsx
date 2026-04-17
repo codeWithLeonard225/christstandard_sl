@@ -28,35 +28,57 @@ const AnnualBroadSheet = () => {
   } = location.state || {};
 
   // 1. Fetch Metadata
-  useEffect(() => {
-    if (!schoolId) return;
-    const q = query(collection(schooldb, "PupilGrades"), where("schoolId", "==", schoolId));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => doc.data());
-      const years = [...new Set(data.map((d) => d.academicYear))].sort().reverse();
-      const classes = [...new Set(data.map((d) => d.className.trim()))].sort();
-      setAcademicYears(years);
-      setAvailableClasses(classes);
-      if (years.length > 0 && !academicYear) setAcademicYear(years[0]);
-      if (classes.length > 0 && !selectedClass) setSelectedClass(classes[0]);
-    });
-    return () => unsubscribe();
-  }, [schoolId]);
+ // 1. Fetch Metadata
+useEffect(() => {
+  if (!schoolId) return;
+  const q = query(collection(schooldb, "PupilGrades"), where("schoolId", "==", schoolId));
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const data = snapshot.docs.map((doc) => doc.data());
+    const years = [...new Set(data.map((d) => d.academicYear))].sort().reverse();
+    const classes = [...new Set(data.map((d) => d.className?.trim()))].filter(Boolean).sort();
+    
+    setAcademicYears(years);
+    setAvailableClasses(classes);
+
+    // Reset selection if current selection is invalid
+    if (years.length > 0 && (!academicYear || !years.includes(academicYear))) {
+      setAcademicYear(years[0]);
+    }
+    if (classes.length > 0 && (!selectedClass || !classes.includes(selectedClass))) {
+      setSelectedClass(classes[0]);
+    }
+  });
+  return () => unsubscribe();
+}, [schoolId]);
 
   // 2. Fetch Pupils
-  useEffect(() => {
-    if (!academicYear || !selectedClass || !schoolId) return;
-    const q = query(collection(db, "PupilsReg"), where("schoolId", "==", schoolId), where("academicYear", "==", academicYear));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const filtered = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(p => p.class && p.class.trim() === selectedClass)
-        .sort((a, b) => a.studentName.localeCompare(b.studentName));
-      setPupils(filtered);
-      if (filtered.length > 0 && !selectedPupil) setSelectedPupil(filtered[0].studentID);
-    });
-    return () => unsubscribe();
-  }, [academicYear, selectedClass, schoolId]);
+ useEffect(() => {
+  if (!academicYear || !selectedClass || !schoolId) return;
+
+  const q = query(
+    collection(db, "PupilsReg"),
+    where("schoolId", "==", schoolId),
+    where("academicYear", "==", academicYear)
+  );
+
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const filtered = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(p => p.class && p.class.trim() === selectedClass)
+      .sort((a, b) => a.studentName.localeCompare(b.studentName));
+
+    setPupils(filtered);
+
+    // ✅ FIX: Always reset selected pupil when class changes
+    if (filtered.length > 0) {
+      setSelectedPupil(filtered[0].studentID);
+    } else {
+      setSelectedPupil(""); // important fallback
+    }
+  });
+
+  return () => unsubscribe();
+}, [academicYear, selectedClass, schoolId]);
 
   // 3. Fetch Grades
   useEffect(() => {
@@ -217,7 +239,7 @@ const handlePrintPDF = () => {
 
     // --- TITLE ---
     doc.setFontSize(14).setFont(undefined, "bold");
-    doc.text("ANNUAL PROGRESS BROAD SHEET", pageWidth / 2, y, { align: "center" });
+    doc.text("REPORT CARD", pageWidth / 2, y, { align: "center" });
     y += 30;
 
     // --- PUPIL INFO (Far-Left & Far-Right Alignment) ---
@@ -332,13 +354,53 @@ const handlePrintPDF = () => {
     let finalY = doc.lastAutoTable.finalY + 50;
     doc.setFontSize(10).setFont(undefined, "normal");
     
-    // Left Signature
-    doc.text("__________________________", margin, finalY);
-    doc.text("Class Teacher's Signature", margin, finalY + 15);
-    
-    // Right Signature
-    doc.text("__________________________", rightBoundary, finalY, { align: "right" });
-    doc.text("Principal's Signature", rightBoundary, finalY + 15, { align: "right" });
+    // ================= TERM SUMMARY TABLE =================
+    const termSummary = [
+      ["No. of Sessions", "", "", ""],
+      ["On Time", "", "", ""],
+      ["Late", "", "", ""],
+      ["Absent", "", "", ""],
+      ["Term Comments", "", "", ""],
+      ["Class Teacher Signature", "", "", ""],
+      ["Principal Signature", "", "", ""],
+    ];
+
+    autoTable(doc, {
+      startY: finalY,
+      head: [["ITEM", "TERM 1", "TERM 2", "TERM 3"]],
+      body: termSummary,
+      theme: "grid",
+      styles: {
+        fontSize: 9,
+        cellPadding: 4,
+        valign: "middle"
+      },
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: 255,
+        halign: "center"
+      },
+      columnStyles: {
+        0: { halign: "left", cellWidth: 180 },
+        1: { halign: "center", cellWidth: 115 },
+        2: { halign: "center", cellWidth: 115 },
+        3: { halign: "center", cellWidth: 115 },
+      },
+    didParseCell: function (data) {
+
+  // Make signature rows bold
+  if (data.row.index >= 5) {
+    data.cell.styles.fontStyle = "bold";
+  }
+
+
+  // ✅ Increase height for "Term Comments" row (row index 4)
+  if (data.row.index === 4) {
+    data.cell.styles.minCellHeight = 30; // 🔥 increase height
+  }
+
+}
+    });
 
     
 
