@@ -55,6 +55,7 @@ import TimeTableDailyAttendanceReport from "../TeacherAssignment/TimeTableDailyA
 import TimeTableTeacherReport from "../TeacherAssignment/TimeTableTeacherReport";
 import YearlyResult from "../TeacherAssignment/YearlyResult";
 import TermResult from "../TeacherAssignment/TermResult";
+import PayrollPage from "../TeacherAssignment/PayrollPage";
 import YearlyGeneralReportCard from "../TeacherAssignment/YearlyGeneralReportCard";
 
 // --- Navigation Items ---
@@ -143,6 +144,12 @@ const NAV_ITEMS = [
     {
     key: "staffAttendance",
     label: "Staff Attendance",
+    icon: <MdWarning />, // 📖
+  },
+
+    {
+    key: "PayrollPage",
+    label: "Staff PayrollPage",
     icon: <MdWarning />, // 📖
   },
 
@@ -272,6 +279,7 @@ function AdminPanel() {
       case "LogoutPage": return <LogoutPage />;
       case "pupilAttendance": return <AttendancePage />;
       case "staffAttendance": return <StaffAttendance />;
+      case "PayrollPage": return <PayrollPage />;
       case "TimetableEntry": return <TimetableEntry />;
       case "WeeklyTimetableReport": return <WeeklyTimetableReport />;
       case "TimeTableTeacherAtt": return <TimeTableTeacherAtt />;

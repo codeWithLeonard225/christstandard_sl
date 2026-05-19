@@ -12,7 +12,7 @@ import {
   query,
   onSnapshot,
   getDocs,
-  where ,
+  where,
 } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
 import { useLocation } from "react-router-dom";
@@ -23,10 +23,14 @@ const UPLOAD_PRESET = "Nardone"; // Cloudinary Upload Preset
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ADMIN_PASSWORD = "1234";
 
+// Dummy classes array - Replace these with your actual school classes if needed
+const SCHOOL_CLASSES = ["JSS 1", "JSS 2", "JSS 3", "SSS 1", "SSS 2", "SSS 3"];
+
 const TeacherRegistration = () => {
   const location = useLocation();
   const schoolId = location.state?.schoolId || "N/A"; // fallback if missing
-  const [formData, setFormData] = useState({
+  
+  const initialFormState = {
     id: null,
     teacherID: uuidv4().slice(0, 8),
     teacherName: "",
@@ -38,9 +42,15 @@ const TeacherRegistration = () => {
     registeredBy: "",
     userPhoto: null,
     userPublicId: null,
-    schoolId: schoolId, // ✅ Add this
-  });
+    schoolId: schoolId,
+    // New Fields
+    isFormMaster: false,
+    formMasterClass: "",
+    teacherCategory: "",
+    salary: "",
+  };
 
+  const [formData, setFormData] = useState(initialFormState);
   const [searchTerm, setSearchTerm] = useState("");
   const [showCamera, setShowCamera] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,10 +58,10 @@ const TeacherRegistration = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [teachers, setTeachers] = useState([]);
 
-  // 🧠 Real-time listener for Teachers collection
+  // Real-time listener for Teachers collection
   useEffect(() => {
     const collectionRef = collection(db, "Teachers");
-   const q = query(collectionRef, where("schoolId", "==", schoolId));
+    const q = query(collectionRef, where("schoolId", "==", schoolId));
 
     const unsubscribe = onSnapshot(
       q,
@@ -69,9 +79,9 @@ const TeacherRegistration = () => {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [schoolId]);
 
-  // 🔍 Filter teachers by name or ID
+  // Filter teachers by name or ID
   const filteredTeachers = useMemo(() => {
     if (!searchTerm.trim()) return teachers;
 
@@ -83,10 +93,15 @@ const TeacherRegistration = () => {
     );
   }, [teachers, searchTerm]);
 
-  // Handle input
+  // Handle input changes
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+      // Clear formMasterClass if checkbox gets unchecked
+      ...(name === "isFormMaster" && !checked ? { formMasterClass: "" } : {}),
+    }));
   };
 
   // Handle upload success
@@ -137,100 +152,90 @@ const TeacherRegistration = () => {
   };
 
   // Handle submit
- // ... existing imports in TeacherRegistration
-
-// ... existing component logic
-
-// Handle submit
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!formData.teacherName.trim()) {
-    toast.error("Teacher name is required.");
-    return;
-  }
-
-  setIsSubmitting(true);
-  
-  const oldTeacherName = teachers.find(t => t.id === formData.id)?.teacherName; // Get the old name
-
-  try {
-    const newTeacherName = formData.teacherName.trim().toUpperCase();
-
-    const teacherData = {
-      teacherID: formData.teacherID,
-      teacherName: newTeacherName, // Use the new, capitalized name
-      gender: formData.gender,
-      phone: formData.phone,
-      email: formData.email,
-      address: formData.address,
-      registrationDate: formData.registrationDate,
-      registeredBy: formData.registeredBy,
-      userPhotoUrl: formData.userPhoto,
-      userPublicId: formData.userPublicId,
-      schoolId: formData.schoolId,
-    };
-
-    if (formData.id) {
-      // --- START: Update Logic ---
-      const teacherRef = doc(db, "Teachers", formData.id);
-      await updateDoc(teacherRef, teacherData);
-
-      // 💥 Step 2: Cascade Update in TeacherAssignments
-      if (oldTeacherName && oldTeacherName !== newTeacherName) {
-        // Query assignments with the OLD teacher name and current school ID
-        const assignmentsQuery = query(
-          collection(db, "TeacherAssignments"),
-          where("teacher", "==", oldTeacherName),
-          where("schoolId", "==", schoolId)
-        );
-        
-        const snapshot = await getDocs(assignmentsQuery); // Use getDocs for one-time fetch
-
-        const updatePromises = snapshot.docs.map(assignmentDoc => {
-          const assignmentRef = doc(db, "TeacherAssignments", assignmentDoc.id);
-          return updateDoc(assignmentRef, {
-            teacher: newTeacherName, // Update to the new name
-          });
-        });
-
-        await Promise.all(updatePromises);
-        toast.success(`Teacher and ${updatePromises.length} assignment(s) updated successfully!`);
-      } else {
-        toast.success("Teacher updated successfully!");
-      }
-      // --- END: Update Logic ---
-    } else {
-      // Standard Add Logic
-      await addDoc(collection(db, "Teachers"), {
-        ...teacherData,
-        timestamp: new Date(),
-      });
-      toast.success("Teacher registered successfully!");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.teacherName.trim()) {
+      toast.error("Teacher name is required.");
+      return;
+    }
+    if (formData.isFormMaster && !formData.formMasterClass) {
+      toast.error("Please assign a class for the Form Master.");
+      return;
     }
 
-    // Reset form
-    setFormData({
-      id: null,
-      teacherID: uuidv4().slice(0, 8),
-      teacherName: "",
-      gender: "",
-      phone: "",
-      email: "",
-      address: "",
-      registrationDate: new Date().toISOString().slice(0, 10),
-      registeredBy: "",
-      userPhoto: null,
-      userPublicId: null,
-      schoolId: schoolId,
-    });
-  } catch (err) {
-    console.error(err);
-    toast.error("Failed to save teacher data.");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
-// ... rest of the component
+    setIsSubmitting(true);
+    const oldTeacherName = teachers.find((t) => t.id === formData.id)?.teacherName;
+
+    try {
+      const newTeacherName = formData.teacherName.trim().toUpperCase();
+
+      const teacherData = {
+        teacherID: formData.teacherID,
+        teacherName: newTeacherName,
+        gender: formData.gender,
+        phone: formData.phone,
+        email: formData.email,
+        address: formData.address,
+        registrationDate: formData.registrationDate,
+        registeredBy: formData.registeredBy,
+        userPhotoUrl: formData.userPhoto,
+        userPublicId: formData.userPublicId,
+        schoolId: formData.schoolId,
+        // Added Columns
+        isFormMaster: formData.isFormMaster,
+        formMasterClass: formData.isFormMaster ? formData.formMasterClass : "",
+        teacherCategory: formData.teacherCategory,
+        salary: formData.salary ? parseFloat(formData.salary) : 0,
+      };
+
+      if (formData.id) {
+        // Update Logic
+        const teacherRef = doc(db, "Teachers", formData.id);
+        await updateDoc(teacherRef, teacherData);
+
+        // Cascade Update in TeacherAssignments
+        if (oldTeacherName && oldTeacherName !== newTeacherName) {
+          const assignmentsQuery = query(
+            collection(db, "TeacherAssignments"),
+            where("teacher", "==", oldTeacherName),
+            where("schoolId", "==", schoolId)
+          );
+
+          const snapshot = await getDocs(assignmentsQuery);
+
+          const updatePromises = snapshot.docs.map((assignmentDoc) => {
+            const assignmentRef = doc(db, "TeacherAssignments", assignmentDoc.id);
+            return updateDoc(assignmentRef, {
+              teacher: newTeacherName,
+            });
+          });
+
+          await Promise.all(updatePromises);
+          toast.success(`Teacher and ${updatePromises.length} assignment(s) updated successfully!`);
+        } else {
+          toast.success("Teacher updated successfully!");
+        }
+      } else {
+        // Standard Add Logic
+        await addDoc(collection(db, "Teachers"), {
+          ...teacherData,
+          timestamp: new Date(),
+        });
+        toast.success("Teacher registered successfully!");
+      }
+
+      // Reset form
+      setFormData({
+        ...initialFormState,
+        teacherID: uuidv4().slice(0, 8),
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to save teacher data.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // Edit existing teacher
   const handleUpdate = (teacher) => {
@@ -244,9 +249,13 @@ const handleSubmit = async (e) => {
       address: teacher.address || "",
       registrationDate: teacher.registrationDate,
       registeredBy: teacher.registeredBy,
-      userPhoto: teacher.userPhotoUrl,
-      userPublicId: teacher.userPublicId,
-       schoolId: teacher.schoolId || schoolId, // ✅ fallback to current schoolId
+      userPhoto: teacher.userPhotoUrl || null,
+      userPublicId: teacher.userPublicId || null,
+      schoolId: teacher.schoolId || schoolId,
+      isFormMaster: teacher.isFormMaster || false,
+      formMasterClass: teacher.formMasterClass || "",
+      teacherCategory: teacher.teacherCategory || "",
+      salary: teacher.salary || "",
     });
     toast.info(`Editing teacher: ${teacher.teacherName}`);
   };
@@ -279,16 +288,6 @@ const handleSubmit = async (e) => {
         <h2 className="text-2xl font-bold text-center mb-4">
           {formData.id ? "Update Teacher" : "Teacher Registration"}
         </h2>
-        {/* 🏫 School ID (read-only field) */}
-        {/* <div className="mb-4">
-          <label className="block mb-2 font-medium text-sm text-gray-700">School ID</label>
-          <input
-            type="text"
-            value={schoolId}
-            readOnly
-            className="w-full p-2 border rounded-lg bg-gray-100 text-gray-600"
-          />
-        </div> */}
 
         <div className="flex flex-col md:flex-row md:space-x-4">
           <div className="flex-1">
@@ -340,16 +339,83 @@ const handleSubmit = async (e) => {
           </div>
         </div>
 
-        <div>
-          <label className="block mb-2 font-medium text-sm">Email</label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleInputChange}
-            className="w-full p-2 mb-4 border rounded-lg"
-          />
+        <div className="flex flex-col md:flex-row md:space-x-4">
+          <div className="flex-1">
+            <label className="block mb-2 font-medium text-sm">Email</label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              className="w-full p-2 mb-4 border rounded-lg"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block mb-2 font-medium text-sm">Teacher Category</label>
+            <select
+              name="teacherCategory"
+              value={formData.teacherCategory}
+              onChange={handleInputChange}
+              className="w-full p-2 mb-4 border rounded-lg"
+              required
+            >
+              <option value="">Select Category</option>
+              <option value="Full Employed Staff">Full Employed Staff</option>
+              <option value="Teacher on Contract">Teacher on Contract</option>
+              <option value="Volunteers Staff">Volunteers Staff</option>
+            </select>
+          </div>
         </div>
+
+        <div className="flex flex-col md:flex-row md:space-x-4 items-end mb-4">
+          <div className="flex-1 w-full">
+            <label className="block mb-2 font-medium text-sm">Salary</label>
+            <input
+              type="number"
+              name="salary"
+              placeholder="0.00"
+              value={formData.salary}
+              onChange={handleInputChange}
+              className="w-full p-2 border rounded-lg"
+            />
+          </div>
+          <div className="flex-1 w-full flex items-center space-x-3 h-10 mt-4 md:mt-0">
+            <input
+              type="checkbox"
+              id="isFormMaster"
+              name="isFormMaster"
+              checked={formData.isFormMaster}
+              onChange={handleInputChange}
+              className="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            />
+            <label htmlFor="isFormMaster" className="font-medium text-sm select-none">
+              Is Form Master?
+            </label>
+          </div>
+        </div>
+
+        {/* Conditional Dropdown for Class Assignment */}
+        {formData.isFormMaster && (
+          <div className="mb-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100 transition-all">
+            <label className="block mb-2 font-medium text-sm text-indigo-900">
+              Assigned Class Room
+            </label>
+            <select
+              name="formMasterClass"
+              value={formData.formMasterClass}
+              onChange={handleInputChange}
+              className="w-full p-2 border border-indigo-300 rounded-lg bg-white"
+              required={formData.isFormMaster}
+            >
+              <option value="">Select Class</option>
+              {SCHOOL_CLASSES.map((cls) => (
+                <option key={cls} value={cls}>
+                  {cls}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label className="block mb-2 font-medium text-sm">Address</label>
@@ -364,9 +430,7 @@ const handleSubmit = async (e) => {
 
         <div className="flex flex-col md:flex-row md:space-x-4">
           <div className="flex-1">
-            <label className="block mb-2 font-medium text-sm">
-              Registration Date
-            </label>
+            <label className="block mb-2 font-medium text-sm">Registration Date</label>
             <input
               type="date"
               name="registrationDate"
@@ -376,9 +440,7 @@ const handleSubmit = async (e) => {
             />
           </div>
           <div className="flex-1">
-            <label className="block mb-2 font-medium text-sm">
-              Registered By
-            </label>
+            <label className="block mb-2 font-medium text-sm">Registered By</label>
             <input
               type="text"
               name="registeredBy"
@@ -453,7 +515,7 @@ const handleSubmit = async (e) => {
       )}
 
       {/* ---------------- TABLE ---------------- */}
-      <div className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-full lg:max-w-4xl">
+      <div className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-full lg:max-w-5xl">
         <h2 className="text-2xl font-bold text-center mb-4">
           Registered Teachers ({filteredTeachers.length} of {teachers.length})
         </h2>
@@ -472,27 +534,13 @@ const handleSubmit = async (e) => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  ID
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Name
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
-                  Gender
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
-                  Phone
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">
-                  Reg. Date
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Photo
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Actions
-                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Category</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Form Master</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">Salary</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Photo</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -505,13 +553,13 @@ const handleSubmit = async (e) => {
                     {teacher.teacherName}
                   </td>
                   <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
-                    {teacher.gender}
+                    {teacher.teacherCategory || "N/A"}
                   </td>
                   <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
-                    {teacher.phone}
+                    {teacher.isFormMaster ? `Yes (${teacher.formMasterClass})` : "No"}
                   </td>
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
-                    {teacher.registrationDate}
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 hidden lg:table-cell">
+                    {teacher.salary ? `${teacher.salary.toLocaleString()}` : "0"}
                   </td>
                   <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
                     {teacher.userPhotoUrl && (
@@ -530,9 +578,7 @@ const handleSubmit = async (e) => {
                       Update
                     </button>
                     <button
-                      onClick={() =>
-                        handleDelete(teacher.id, teacher.teacherName)
-                      }
+                      onClick={() => handleDelete(teacher.id, teacher.teacherName)}
                       className="text-red-600 hover:text-red-900"
                     >
                       Delete
@@ -542,10 +588,7 @@ const handleSubmit = async (e) => {
               ))}
               {filteredTeachers.length === 0 && (
                 <tr>
-                  <td
-                    colSpan="7"
-                    className="px-6 py-4 text-center text-sm text-gray-500"
-                  >
+                  <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">
                     No teachers found.
                   </td>
                 </tr>
