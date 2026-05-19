@@ -18,7 +18,7 @@ import localforage from "localforage";
 const STORE_NAME = "PayrollCache";
 const PAYROLL_COLLECTION = "StaffPayroll";
 const STAFF_COLLECTION = "Teachers";
-const ATT_COLLECTION = "StaffAttendanceSimple";
+const ATT_COLLECTION = "StaffAttendanceSimple"; // Source for metric rules
 
 const payrollStore = localforage.createInstance({
   name: STORE_NAME,
@@ -30,46 +30,19 @@ const getCurrentMonthYear = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
-// Helper: Generates an array of working days up to today (if current month) or the full month (if past month)
-const getWorkingDaysInMonth = (monthYearStr) => {
+// Helper: Counts exact Monday through Friday days in a given year-month string (YYYY-MM)
+const countWorkingDaysInMonth = (monthYearStr) => {
   const [year, month] = monthYearStr.split("-").map(Number);
   const totalDays = new Date(year, month, 0).getDate(); 
-  const daysArray = [];
+  let workingDaysCount = 0;
 
-  // Get current real-world date tracking details
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth() + 1;
-  const currentDay = today.getDate();
-
-  const isCurrentMonth = (year === currentYear && month === currentMonth);
-
-  for (let day = 1; day <= totalDays; day++) {
-    // CRITICAL FIX: If checking the active current month, stop adding days if they are in the future
-    if (isCurrentMonth && day > currentDay) {
-      break; 
-    }
-
-    const dateObj = new Date(year, month - 1, day);
-    const dayOfWeek = dateObj.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip Sunday (0) and Saturday (6)
-      const dayStr = String(day).padStart(2, "0");
-      daysArray.push(`${year}-${String(month).padStart(2, "0")}-${dayStr}`);
-    }
-  }
-  return daysArray;
-};
-
-// Helper: Separate total count of actual weekdays for the entire month to maintain baseline dynamic rate formula
-const getTotalWorkingDaysCount = (monthYearStr) => {
-  const [year, month] = monthYearStr.split("-").map(Number);
-  const totalDays = new Date(year, month, 0).getDate(); 
-  let count = 0;
   for (let day = 1; day <= totalDays; day++) {
     const dayOfWeek = new Date(year, month - 1, day).getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip Sunday (0) and Saturday (6)
+      workingDaysCount++;
+    }
   }
-  return count || 22;
+  return workingDaysCount || 22; // Safe backup fallback
 };
 
 export default function PayrollPage() {
@@ -78,16 +51,18 @@ export default function PayrollPage() {
   
   const [staffList, setStaffList] = useState([]);
   const [payrollRecords, setPayrollRecords] = useState({});
-  const [attendanceLogs, setAttendanceLogs] = useState([]); 
+  const [attendanceLogs, setAttendanceLogs] = useState([]); // Raw logs for current month aggregation
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthYear());
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Manual text adjustments
   const [adjustments, setAdjustments] = useState({});
 
   const CACHE_KEY_STAFF = `payroll_staff_${schoolId}`;
 
-  // 1. Fetch Staff List
+  // 1. Fetch Staff List (Cache-First + Sync)
   useEffect(() => {
     if (!schoolId || schoolId === "N/A") return;
     setLoading(true);
@@ -127,7 +102,7 @@ export default function PayrollPage() {
     })();
   }, [schoolId, CACHE_KEY_STAFF]);
 
-  // 2. Fetch Payroll Records + Attendance logs
+  // 2. Fetch Payroll Records + Attendance logs for targeted month
   useEffect(() => {
     if (!schoolId || schoolId === "N/A") return;
     setLoading(true);
@@ -135,6 +110,7 @@ export default function PayrollPage() {
 
     (async () => {
       try {
+        // Fetch payroll templates 
         const qPayroll = query(
           collection(schoollpq, PAYROLL_COLLECTION),
           where("schoolId", "==", schoolId),
@@ -142,6 +118,7 @@ export default function PayrollPage() {
         );
         const snapPayroll = await getDocs(qPayroll);
 
+        // Fetch monthly attendance metrics via start/end bounds matching string template prefix
         const qAttendance = query(
           collection(schoollpq, ATT_COLLECTION),
           where("schoolId", "==", schoolId),
@@ -189,10 +166,7 @@ export default function PayrollPage() {
 
   // 3. Dynamic Calculation Processor Pipeline
   const computedPayroll = useMemo(() => {
-    // Array containing working days only up to today (if current month)
-    const activeWorkingDaysList = getWorkingDaysInMonth(selectedMonth);
-    // Baseline total working days (e.g., 22 days) used to determine true daily rate
-    const totalWorkingDaysInMonth = getTotalWorkingDaysCount(selectedMonth);
+    const workingDays = countWorkingDaysInMonth(selectedMonth);
 
     return staffList
       .filter((staff) =>
@@ -203,61 +177,41 @@ export default function PayrollPage() {
         const savedRecord = payrollRecords[idKey] || {};
         const adj = adjustments[idKey] || {};
 
+        // Base salary fallback chain mapping your dynamic input registration field
         const baseSalary = parseFloat(staff.salary) || parseFloat(staff.baseSalary) || parseFloat(savedRecord.baseSalary) || 0;
-        const dailyRate = totalWorkingDaysInMonth > 0 ? baseSalary / totalWorkingDaysInMonth : 0;
+        
+        // Calculate daily rate relative to tracking month size
+        const dailyRate = workingDays > 0 ? baseSalary / workingDays : 0;
 
+        // Extract attendance states matching current staff item
         const staffAtts = attendanceLogs.filter(log => log.staffID === idKey);
+        const lateCount = staffAtts.filter(log => log.status === "Late").length;
+        const absentCount = staffAtts.filter(log => log.status === "Absent").length;
 
-        let presentCount = 0;
-        let databaseLateCount = 0;
-        let absentCount = 0;
-
-        // Loop only through valid elapsed days
-        activeWorkingDaysList.forEach((dateStr) => {
-          const dayLog = staffAtts.find(log => log.date === dateStr);
-
-          if (dayLog) {
-            const status = dayLog.status;
-            if (status === "Present") {
-              presentCount++;
-            } else if (status === "Late") {
-              databaseLateCount++;
-              presentCount++; 
-            } else if (status === "Absent") {
-              absentCount++;
-            } else if (status === "Sick" || status === "Leave" || status === "Excuse") {
-              // Valid exemptions
-            } else {
-              absentCount++;
-            }
-          } else {
-            // No log found for an elapsed working day means they missed it
-            absentCount++;
-          }
-        });
-
-        const manualLateInput = adj.lateCount !== undefined ? adj.lateCount : (savedRecord.lateCount !== undefined ? savedRecord.lateCount : databaseLateCount);
-        const allowance = adj.allowance !== undefined ? adj.allowance : (savedRecord.allowance || 0);
-        const manualDeductionInput = adj.deduction !== undefined ? adj.deduction : (savedRecord.deduction || 0);
-
-        const lateDeduction = manualLateInput * (dailyRate * 0.10);
-        const absentDeduction = absentCount * dailyRate;
+        // Auto deduction rules calculator logic
+        const lateDeduction = lateCount * (dailyRate * 0.10); // 10% fee
+        const absentDeduction = absentCount * dailyRate;      // 100% fee
         const autoCalculatedDeduction = lateDeduction + absentDeduction;
 
+        // Unsaved Override inputs vs Saved DB defaults
+        const allowance = adj.allowance !== undefined ? adj.allowance : (savedRecord.allowance || 0);
+        
+        // Combine rule execution totals with manual modifications if present
+        const manualDeductionInput = adj.deduction !== undefined ? adj.deduction : (savedRecord.deduction || 0);
         const totalDeduction = autoCalculatedDeduction + manualDeductionInput;
+
         const netSalary = baseSalary + allowance - totalDeduction;
 
         return {
           ...staff,
           idKey,
           baseSalary,
-          workingDays: totalWorkingDaysInMonth,
-          presentCount,
-          lateCount: manualLateInput,
+          workingDays,
+          lateCount,
           absentCount,
           autoDeduction: autoCalculatedDeduction,
           allowance,
-          deduction: manualDeductionInput, 
+          deduction: manualDeductionInput, // tracking base modifications independently
           totalDeduction,
           netSalary,
           status: savedRecord.status || "Draft",
@@ -282,9 +236,8 @@ export default function PayrollPage() {
           monthYear: selectedMonth,
           baseSalary: item.baseSalary,
           allowance: item.allowance,
-          deduction: item.totalDeduction, 
+          deduction: item.totalDeduction, // Save computed sum structure directly
           netSalary: item.netSalary,
-          lateCount: item.lateCount, 
           status: "Processed",
           processedBy,
           updatedAt: new Date(),
@@ -413,23 +366,22 @@ export default function PayrollPage() {
                       {/* Base Salary */}
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-gray-600">
                         Le {item.baseSalary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        <div className="text-[10px] text-gray-400">({item.workingDays} total days)</div>
+                        <div className="text-[10px] text-gray-400">({item.workingDays} work days)</div>
                       </td>
 
                       {/* Attendance Tally Visual badges */}
                       <td className="px-4 py-3 whitespace-nowrap text-center">
-                        <div className="flex flex-col gap-1 items-center justify-center">
-                          <div className="flex justify-center gap-1.5">
-                            <span className="px-2 py-0.5 text-xs rounded bg-green-50 text-green-700 border border-green-200">
-                              {item.presentCount} Present
-                            </span>
-                            <span className="px-2 py-0.5 text-xs rounded bg-red-50 text-red-700 border border-red-200 font-bold">
-                              {item.absentCount} Absent
-                            </span>
-                          </div>
-                          <span className="text-[11px] text-amber-700 font-medium">
-                            Logged Late: {item.lateCount} days
+                        <div className="flex justify-center gap-1.5">
+                          <span className="px-2 py-0.5 text-xs rounded bg-red-50 text-red-700 border border-red-200">
+                            {item.present} Present
                           </span>
+                          <span className="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-700 border border-amber-200">
+                            {item.lateCount} Late
+                          </span>
+                          <span className="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-700 border border-amber-200">
+                            {item.lateCount} Late
+                          </span>
+                          
                         </div>
                       </td>
 
@@ -441,36 +393,20 @@ export default function PayrollPage() {
                       {/* Manual Custom Adjustments Inputs */}
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-gray-400 w-12">Allow:</span>
-                            <input
-                              type="number"
-                              placeholder="+ Allowance"
-                              value={item.allowance || ""}
-                              onChange={(e) => handleAdjustmentChange(item.idKey, "allowance", e.target.value)}
-                              className="block w-28 text-xs font-mono border-gray-300 rounded p-1"
-                            />
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-amber-600 w-12">Late:</span>
-                            <input
-                              type="number"
-                              placeholder="Late Days"
-                              value={item.lateCount || ""}
-                              onChange={(e) => handleAdjustmentChange(item.idKey, "lateCount", e.target.value)}
-                              className="block w-28 text-xs font-mono border-amber-300 bg-amber-50/30 rounded p-1 text-amber-800 focus:ring-amber-500"
-                            />
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-red-500 w-12">Deduct:</span>
-                            <input
-                              type="number"
-                              placeholder="- Deduction"
-                              value={item.deduction || ""}
-                              onChange={(e) => handleAdjustmentChange(item.idKey, "deduction", e.target.value)}
-                              className="block w-28 text-xs font-mono border-gray-300 rounded p-1 text-red-600"
-                            />
-                          </div>
+                          <input
+                            type="number"
+                            placeholder="+ Allowance"
+                            value={item.allowance || ""}
+                            onChange={(e) => handleAdjustmentChange(item.idKey, "allowance", e.target.value)}
+                            className="block w-28 text-xs font-mono border-gray-300 rounded p-1"
+                          />
+                          <input
+                            type="number"
+                            placeholder="- Deduction"
+                            value={item.deduction || ""}
+                            onChange={(e) => handleAdjustmentChange(item.idKey, "deduction", e.target.value)}
+                            className="block w-28 text-xs font-mono border-gray-300 rounded p-1 text-red-600"
+                          />
                         </div>
                       </td>
 

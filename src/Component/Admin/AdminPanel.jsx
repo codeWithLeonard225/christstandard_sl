@@ -46,6 +46,7 @@ import LogoutPage from "../Admin/LogoutPage"
 import FeesResult from "../Admin/FeesResult"
 import AttendancePage from "../Voters/AttendancePage"
 import StaffAttendance from "../TeacherAssignment/StaffAttendance";
+import StaffAttendanceHistory from "../TeacherAssignment/StaffAttendanceHistory";
 import CopyPupilGrades from "../Voters/CopyPupilGrades"
 import FixClassNames from "../Voters/FixClassNames"
 import TimetableEntry from "../TeacherAssignment/TimetableEntry";
@@ -57,6 +58,7 @@ import YearlyResult from "../TeacherAssignment/YearlyResult";
 import TermResult from "../TeacherAssignment/TermResult";
 import PayrollPage from "../TeacherAssignment/PayrollPage";
 import YearlyGeneralReportCard from "../TeacherAssignment/YearlyGeneralReportCard";
+import StaffAttendanceProfileReport from "../TeacherAssignment/StaffAttendanceProfileReport";
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
@@ -148,8 +150,13 @@ const NAV_ITEMS = [
   },
 
     {
-    key: "PayrollPage",
-    label: "Staff PayrollPage",
+    key: "StaffAttendanceProfileReport",
+    label: "Staff Attendance Report",
+    icon: <MdWarning />, // 📖
+  },
+    {
+    key: "StaffAttendanceHistory",
+    label: "StaffAttendanceHistory",
     icon: <MdWarning />, // 📖
   },
 
@@ -279,6 +286,8 @@ function AdminPanel() {
       case "LogoutPage": return <LogoutPage />;
       case "pupilAttendance": return <AttendancePage />;
       case "staffAttendance": return <StaffAttendance />;
+      case "StaffAttendanceHistory": return <StaffAttendanceHistory />;
+      case "StaffAttendanceProfileReport": return <StaffAttendanceProfileReport />;
       case "PayrollPage": return <PayrollPage />;
       case "TimetableEntry": return <TimetableEntry />;
       case "WeeklyTimetableReport": return <WeeklyTimetableReport />;
