@@ -213,18 +213,21 @@ export default function StaffAttendanceProfileReport() {
  // ==========================================
   // EXPORT COMPREHENSIVE PDF REPORT
   // ==========================================
+  // ==========================================
+  // EXPORT COMPREHENSIVE PDF REPORT (WITH CALENDAR GRID)
+  // ==========================================
   const exportPDF = () => {
     if (!selectedTeacher) return;
     
     const doc = new jsPDF();
     doc.setFont("Helvetica", "bold");
-    doc.setFontSize(20);
-    doc.setTextColor(67, 56, 202); // <--- FIXED: changed from textColor to setTextColor
+    doc.setFontSize(18);
+    doc.setTextColor(67, 56, 202); 
     doc.text("STAFF ATTENDANCE METRIC REPORT", 14, 20);
     
     doc.setFontSize(10);
     doc.setFont("Helvetica", "normal");
-    doc.setTextColor(100, 116, 139); // <--- FIXED
+    doc.setTextColor(100, 116, 139); 
     doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 26);
     
     // Draw Border Line
@@ -233,28 +236,98 @@ export default function StaffAttendanceProfileReport() {
     
     // Teacher Metadata Matrix Layout Block
     doc.setFont("Helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(30, 41, 59); // <--- FIXED
-    doc.text("Employee Details", 14, 40);
+    doc.setFontSize(11);
+    doc.setTextColor(30, 41, 59); 
+    doc.text("Employee Details", 14, 38);
     
     doc.setFont("Helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`Full Name: ${selectedTeacher.teacherName}`, 14, 47);
-    doc.text(`Teacher ID: ${selectedTeacher.teacherID}`, 14, 53);
-    doc.text(`Category: ${selectedTeacher.teacherCategory || "N/A"}`, 14, 59);
-    doc.text(`Reporting Period: ${selectedMonth}`, 14, 65);
+    doc.setFontSize(9);
+    doc.text(`Full Name: ${selectedTeacher.teacherName}`, 14, 44);
+    doc.text(`Teacher ID: ${selectedTeacher.teacherID}`, 14, 49);
+    doc.text(`Category: ${selectedTeacher.teacherCategory || "N/A"}`, 14, 54);
+    doc.text(`Reporting Period: ${selectedMonth}`, 14, 59);
     
     // Render Quick Analytical Block
     doc.setFont("Helvetica", "bold");
-    doc.text("Monthly Metrics Summary", 120, 40);
+    doc.text("Monthly Metrics Summary", 120, 38);
     doc.setFont("Helvetica", "normal");
-    doc.text(`Present (On-Time): ${summaryMetrics.present}`, 120, 47);
-    doc.text(`Late Arrival Cycles: ${summaryMetrics.late}`, 120, 53);
-    doc.text(`Unexcused Absences: ${summaryMetrics.absent}`, 120, 59);
-    doc.text(`Logged Work Hours: ${summaryMetrics.totalHours.toFixed(2)} Hrs`, 120, 65);
+    doc.text(`Present: ${summaryMetrics.present}  |  Late: ${summaryMetrics.late}  |  Absent: ${summaryMetrics.absent}`, 120, 44);
+    doc.text(`Sick: ${summaryMetrics.sick}  |  Leave: ${summaryMetrics.leave}  |  Excuse: ${summaryMetrics.excuse}`, 120, 49);
+    doc.text(`Missed Out Clocks: ${summaryMetrics.missedOut}`, 120, 54);
+    doc.text(`Logged Work Hours: ${summaryMetrics.totalHours.toFixed(1)} Hrs`, 120, 59);
 
+    // ----------------------------------------------------
+    // PART 1: GENERATE VISUAL CALENDAR SHEET MATRIX
+    // ----------------------------------------------------
+    // Group calendarDays array into chunks of 7 days (weeks)
+    const calendarRows = [];
+    for (let i = 0; i < calendarDays.length; i += 7) {
+      const weekChunk = calendarDays.slice(i, i + 7);
+      const rowCells = weekChunk.map(day => {
+        if (day.blank) return "";
+        let cellText = `${day.dayNum}\n`;
+        if (day.data) {
+          if (day.data.clockOut === "Did Not Clock Out") {
+            cellText += "[MISSED OUT]";
+          } else {
+            cellText += `[${day.data.status.toUpperCase()}]\nI: ${formatTime(day.data.clockIn)}\nO: ${formatTime(day.data.clockOut)}`;
+          }
+        }
+        return cellText;
+      });
+      // Pad out the last week if it doesn't have 7 full items
+      while (rowCells.length < 7) rowCells.push("");
+      calendarRows.push(rowCells);
+    }
+
+    autoTable(doc, {
+      startY: 66,
+      head: [["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]],
+      body: calendarRows,
+      theme: "grid",
+      styles: { 
+        fontSize: 7, 
+        font: "Helvetica", 
+        cellPadding: 2, 
+        minCellHeight: 18, 
+        valign: "top", 
+        halign: "left" 
+      },
+      headStyles: { 
+        fillColor: [30, 41, 59], 
+        fontStyle: "bold", 
+        halign: "center",
+        minCellHeight: 6
+      },
+      // Color code cells dynamically based on status matching your UI theme
+      didParseCell: (data) => {
+        if (data.section === "body" && data.cell.text.length > 0) {
+          const textStr = data.cell.text.join(" ");
+          if (textStr.includes("[PRESENT]")) {
+            data.cell.styles.fillColor = [240, 253, 244]; // bg-green-50
+            data.cell.styles.textColor = [21, 128, 61];   // text-green-700
+          } else if (textStr.includes("[LATE]")) {
+            data.cell.styles.fillColor = [254, 252, 232]; // bg-yellow-50
+            data.cell.styles.textColor = [161, 98, 7];    // text-yellow-700
+          } else if (textStr.includes("[ABSENT]")) {
+            data.cell.styles.fillColor = [254, 242, 242]; // bg-red-50
+            data.cell.styles.textColor = [185, 28, 28];   // text-red-700
+          } else if (textStr.includes("[MISSED OUT]")) {
+            data.cell.styles.fillColor = [255, 247, 237]; // bg-orange-50
+            data.cell.styles.textColor = [194, 65, 12];   // text-orange-700
+          } else if (textStr.includes("[SICK]") || textStr.includes("[LEAVE]") || textStr.includes("[EXCUSE]")) {
+            data.cell.styles.fillColor = [240, 249, 255]; // bg-sky-50
+            data.cell.styles.textColor = [3, 105, 161];   // text-sky-700
+          }
+        }
+      }
+    });
+
+    // ----------------------------------------------------
+    // PART 2: CHRONOLOGICAL ENTRY STREAM TABLE
+    // ----------------------------------------------------
     const tableBody = [...monthlyRecords]
-      .sort((a,b) => a.date.localeCompare(b.date))
+      .sort((a, b) => a.date.localeCompare(b.date))
       .map(r => [
         r.date,
         r.clockOut === "Did Not Clock Out" ? "Missed Out Flag" : r.status,
@@ -264,10 +337,10 @@ export default function StaffAttendanceProfileReport() {
       ]);
 
     autoTable(doc, {
-      startY: 75,
+      startY: doc.lastAutoTable.finalY + 10, // Dynamically starts right below the calendar matrix
       head: [["Calendar Date", "Evaluated Status", "Clocked In Time", "Clocked Out Time", "Total Hours"]],
       body: tableBody,
-      styles: { fontSize: 9, font: "Helvetica", cellPadding: 3 },
+      styles: { fontSize: 8, font: "Helvetica", cellPadding: 2.5 },
       headStyles: { fillColor: [67, 56, 202], fontStyle: "bold" },
       alternateRowStyles: { fillColor: [248, 250, 252] },
     });

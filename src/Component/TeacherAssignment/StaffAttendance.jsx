@@ -20,8 +20,9 @@ import { useAuth } from "../Security/AuthContext";
 const STAFF_COLLECTION = "Teachers";
 const ATT_COLLECTION = "StaffAttendancePro";
 
-const CLOCK_IN_HOUR = 7;
-const CLOCK_IN_MINUTE = 45;
+// Adjusted late cutoff to 8:00 AM
+const CLOCK_IN_HOUR = 8;
+const CLOCK_IN_MINUTE = 0;
 
 const getTodayDate = () => new Date().toISOString().slice(0, 10);
 
@@ -35,15 +36,20 @@ export default function StaffAttendanceProfessional() {
 
   const [loading, setLoading] = useState(true);
   const [attendanceDate, setAttendanceDate] = useState(getTodayDate());
-  // Search state for filtering names
   const [searchQuery, setSearchQuery] = useState("");
 
   // ==========================================
-  // VIEW-ONLY CHECK FOR HISTORICAL RECORDS
+  // VIEW-ONLY CHECK & LOCKOUT CONDITIONS
   // ==========================================
   const isToday = useMemo(() => {
     return attendanceDate === getTodayDate();
   }, [attendanceDate]);
+
+  // Helper check to see if the system time is past 3:00 PM
+  const isPastThreePM = useMemo(() => {
+    const now = new Date();
+    return now.getHours() >= 15;
+  }, [attendanceRecords]); 
 
   // =========================
   // LOAD STAFF
@@ -115,12 +121,11 @@ export default function StaffAttendanceProfessional() {
   };
 
   // ==========================================
-  // SORT & FILTER STAFF (As-you-type filter)
+  // SORT & FILTER STAFF
   // ==========================================
   const filteredAndSortedStaff = useMemo(() => {
     let list = [...staffList];
 
-    // Filter by name match if search text exists
     if (searchQuery.trim() !== "") {
       const lowerQuery = searchQuery.toLowerCase();
       list = list.filter((teacher) =>
@@ -128,7 +133,6 @@ export default function StaffAttendanceProfessional() {
       );
     }
 
-    // Sort alphabetically by name
     return list.sort((a, b) =>
       (a.teacherName || "").localeCompare(b.teacherName || "")
     );
@@ -198,6 +202,14 @@ export default function StaffAttendanceProfessional() {
   // =========================
   const handleClockOut = async (teacherID) => {
     if (!isToday) return;
+
+    const now = new Date();
+    // Block operations programmatically if triggered after 3 PM
+    if (now.getHours() >= 15) {
+      toast.error("Clock out window has closed (past 3:00 PM)");
+      return;
+    }
+
     try {
       const record = attendanceRecords[teacherID];
 
@@ -211,16 +223,25 @@ export default function StaffAttendanceProfessional() {
         return;
       }
 
-      const now = new Date();
       const clockIn = record.clockIn?.toDate
         ? record.clockIn.toDate()
         : new Date(record.clockIn);
 
-      let workingHours = 0;
+      // Setup target log clockOut value
+      let calculatedClockOut = new Date(now);
 
+      // Check if time is between 2:00 PM (14:00) and 3:00 PM (15:00)
+      if (now.getHours() === 14) {
+        calculatedClockOut.setHours(14);
+        calculatedClockOut.setMinutes(0);
+        calculatedClockOut.setSeconds(0);
+        calculatedClockOut.setMilliseconds(0);
+      }
+
+      let workingHours = 0;
       if (clockIn) {
         workingHours =
-          (now.getTime() - clockIn.getTime()) /
+          (calculatedClockOut.getTime() - clockIn.getTime()) /
           (1000 * 60 * 60);
       }
 
@@ -231,7 +252,7 @@ export default function StaffAttendanceProfessional() {
       );
 
       await updateDoc(ref, {
-        clockOut: now,
+        clockOut: calculatedClockOut,
         workingHours: Number(workingHours.toFixed(2)),
       });
 
@@ -438,7 +459,7 @@ export default function StaffAttendanceProfessional() {
           </div>
         </div>
 
-        {/* AS-YOU-TYPE FILTER ELEMENT */}
+        {/* SEARCH FILTER */}
         <div className="mb-5 flex items-center max-w-md relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -512,7 +533,7 @@ export default function StaffAttendanceProfessional() {
                         </button>
                         <button
                           onClick={() => handleClockOut(teacher.teacherID)}
-                          disabled={!isToday || !record?.clockIn || !!record?.clockOut}
+                          disabled={!isToday || !record?.clockIn || !!record?.clockOut || isPastThreePM}
                           className="flex-1 min-w-[75px] bg-indigo-600 text-white py-1.5 px-2 rounded text-xs font-medium disabled:bg-gray-200 disabled:text-gray-400 transition"
                         >
                           Clock Out
@@ -561,7 +582,6 @@ export default function StaffAttendanceProfessional() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="w-[18%] px-4 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Teacher</th>
-                     
                       <th className="w-[10%] px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Clock In</th>
                       <th className="w-[10%] px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Clock Out</th>
                       <th className="w-[10%] px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Hours</th>
@@ -574,7 +594,6 @@ export default function StaffAttendanceProfessional() {
                       const record = attendanceRecords[teacher.teacherID];
                       return (
                         <tr key={teacher.id} className="hover:bg-gray-50 transition">
-                          {/* Profile Combo Column (Saves Massive Width) */}
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="font-bold text-gray-900">{teacher.teacherName}</div>
                             <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-mono text-gray-400">
@@ -600,7 +619,7 @@ export default function StaffAttendanceProfessional() {
                               </button>
                               <button
                                 onClick={() => handleClockOut(teacher.teacherID)}
-                                disabled={!isToday || !record?.clockIn || !!record?.clockOut}
+                                disabled={!isToday || !record?.clockIn || !!record?.clockOut || isPastThreePM}
                                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded text-xs font-medium disabled:bg-gray-200 disabled:text-gray-400 transition"
                               >
                                 Clock Out
