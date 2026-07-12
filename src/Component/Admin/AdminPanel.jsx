@@ -59,6 +59,7 @@ import TermResult from "../TeacherAssignment/TermResult";
 import PayrollPage from "../TeacherAssignment/PayrollPage";
 import YearlyGeneralReportCard from "../TeacherAssignment/YearlyGeneralReportCard";
 import StaffAttendanceProfileReport from "../TeacherAssignment/StaffAttendanceProfileReport";
+import ClassPromotion from "../Voters/ClassPromotion";
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
@@ -70,6 +71,7 @@ const NAV_ITEMS = [
       { key: "Form", label: " Pupils", icon: <MdPerson /> },
       { key: "class", label: " Class", icon: <MdPerson /> },
       { key: "classList", label: "Class List", icon: <MdPerson /> },
+          { key: "ClassPromotion", label: " ClassPromotion", icon: <MdPerson /> },
     ],
   },
   {
@@ -297,6 +299,7 @@ function AdminPanel() {
       case "CopyPupilGrades": return <CopyPupilGrades />;
       case "FixClassNames": return <FixClassNames />;
       case "BankFeesPage": return <BankFeesPage />;
+      case "ClassPromotion": return <ClassPromotion />;
 
       default: return <Placeholder title={activeTab} />;
     }
