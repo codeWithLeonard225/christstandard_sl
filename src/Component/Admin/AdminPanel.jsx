@@ -32,6 +32,7 @@ import SubGradeMatrixPage from "../TeacherAssignment/SubGradeMatrixPage";
 import ClassFullTermMatrixPage from "../TeacherAssignment/ClassFullTermMatrixPage";
 import GradeSheetPage from "../TeacherAssignment/GradeSheetPage";
 import GeneralReportCard from "../PupilsPage/GeneralReportCard";
+import ReportCardTermly from "../PupilsPage/ReportCardTermly";
 import Dashboard from "../Dashboard/Dashboard"
 import RegDashboard from "../Dashboard/RegDashboard"
 import StudentFilterPage from "../Voters/StudentFilterPage";
@@ -107,10 +108,11 @@ const NAV_ITEMS = [
       { key: "TeacherPupilsPageAdmin", label: "TeacherPupilsGrade", icon: <MdPerson /> },
       { key: "SubGradeMatrixPage", label: "Sub Grade Sheet", icon: <MdPerson /> },
       { key: "ClassFullTermMatrixPage", label: "Term Grade Sheet", icon: <MdPerson /> },
-      { key: "GeneralReportCard", label: "ReportCard", icon: <MdPerson /> },
-      { key: "TermResult", label: "Term Result", icon: <MdPerson /> },
-      { key: "YearlyResult", label: "Yearly Result", icon: <MdPerson /> },
-      { key: "YearlyGeneralReportCard", label: "YearlyGeneralReportCard", icon: <MdPerson /> },
+         { key: "ReportCardTermly", label: "ReportCard Termly", icon: <MdPerson /> },
+      { key: "GeneralReportCard", label: "ReportCard Yearly", icon: <MdPerson /> },
+      { key: "TermResult", label: "TermResult GradeSheet", icon: <MdPerson /> },
+       { key: "YearlyResult", label: "Yearly GradeSheet", icon: <MdPerson /> },
+             { key: "YearlyGeneralReportCard", label: "YearlyGeneralReportCard", icon: <MdPerson /> },
       // { key: "Testing", label: "Testing", icon: <MdPerson /> },
 
     ],
@@ -277,6 +279,7 @@ function AdminPanel() {
       case "beceResult": return <NationalResultPage />;
       case "beceReport": return <BECEStatementOfResult />;
       case "GeneralReportCard": return <GeneralReportCard />;
+       case "ReportCardTermly": return <ReportCardTermly />;
       case "TermResult": return <TermResult />;
       case "YearlyResult": return <YearlyResult />;
       case "YearlyGeneralReportCard": return <YearlyGeneralReportCard />;
