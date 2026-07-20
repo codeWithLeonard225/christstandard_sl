@@ -203,11 +203,11 @@ const AnnualBroadSheet = () => {
     const footers = {
       totals: { t1: activePupilStats.t1, t2: activePupilStats.t2, t3: activePupilStats.t3, ann: activePupilStats.annual },
       percents: {
-        t1: subjects.length ? Math.round(activePupilStats.t1 / subjects.length) : 0,
-        t2: subjects.length ? Math.round(activePupilStats.t2 / subjects.length) : 0,
-        t3: subjects.length ? Math.round(activePupilStats.t3 / subjects.length) : 0,
-        ann: subjects.length ? Math.round(activePupilStats.annual / subjects.length) : 0
-      },
+  t1: subjects.length ? (activePupilStats.t1 / subjects.length).toFixed(1) : "0.0",
+  t2: subjects.length ? (activePupilStats.t2 / subjects.length).toFixed(1) : "0.0",
+  t3: subjects.length ? (activePupilStats.t3 / subjects.length).toFixed(1) : "0.0",
+  ann: subjects.length ? (activePupilStats.annual / subjects.length).toFixed(1) : "0.0"
+},
       ranks: {
         t1: [...allStudentsStats].sort((a,b)=>b.t1-a.t1).findIndex(s=>s.id === selectedPupil)+1,
         t2: [...allStudentsStats].sort((a,b)=>b.t2-a.t2).findIndex(s=>s.id === selectedPupil)+1,
