@@ -61,6 +61,7 @@ const Registration = () => {
         gender: "",
         addressLine1: "",
         addressLine2: "",
+        houseColor: "", // ✅ NEW
         parentName: "",
         parentPhone: "",
         class: "",
@@ -371,6 +372,7 @@ const Registration = () => {
                 gender: formData.gender,
                 addressLine1: formData.addressLine1,
                 addressLine2: formData.addressLine2,
+                 houseColor: formData.houseColor, // ✅ NEW
                 parentName: formData.parentName,
                 parentPhone: formData.parentPhone,
                 class: formData.class,
@@ -407,6 +409,7 @@ const Registration = () => {
                 gender: "",
                 addressLine1: "",
                 addressLine2: "",
+                houseColor: "",
                 parentName: "",
                 parentPhone: "",
                 class: "",
@@ -449,6 +452,7 @@ const Registration = () => {
             gender: user.gender || "",
             addressLine1: user.addressLine1 || "",
             addressLine2: user.addressLine2 || "",
+            houseColor: user.houseColor || "",
             parentName: user.parentName || "",
             parentPhone: user.parentPhone || "",
             class: user.class,
@@ -635,6 +639,7 @@ const Registration = () => {
                         <select name="academicYear" value={formData.academicYear} onChange={handleInputChange} className="w-full p-2 border rounded-lg" required >
                             <option value="">Select Year</option>
                             <option value="2025/2026">2025/2026</option>
+                            <option value="2026/2027">2026/2027</option>
                         </select>
                         {/* Display Previous Year */}
                         {formData.id && originalAcademicInfo && (
@@ -678,6 +683,19 @@ const Registration = () => {
                             ))}
                         </select>
                     </div>
+                    <div className="flex-1">
+    <label className="block mb-2 font-medium text-sm">
+        House Color
+    </label>
+    <input
+        type="text"
+        name="houseColor"
+        value={formData.houseColor}
+        onChange={handleInputChange}
+        placeholder="Enter house color"
+        className="w-full p-2 mb-4 border rounded-lg"
+    />
+</div>
 
 
                 </div>

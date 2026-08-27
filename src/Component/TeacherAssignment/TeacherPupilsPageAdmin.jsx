@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { db } from "../../../firebase";
 import { schooldb } from "../Database/SchoolsResults"; 
+// import { pupilLoginFetch } from "../Database/PupilLogin";
 import {
     collection,
     onSnapshot,
@@ -10,7 +11,6 @@ import {
     doc,
     serverTimestamp,
     orderBy,
-    limit,
     getDocs,
     deleteDoc,
 } from "firebase/firestore";
@@ -38,6 +38,9 @@ const GradesAuditPage = () => {
     const [selectedClass, setSelectedClass] = useState("");
     const [selectedSubject, setSelectedSubject] = useState("");
     const [selectedTest, setSelectedTest] = useState("Term 1 T1");
+    
+    // Academic Year State Management
+    const [academicYearOptions, setAcademicYearOptions] = useState([]);
     const [academicYear, setAcademicYear] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
@@ -57,10 +60,7 @@ const GradesAuditPage = () => {
             setAllTeachers(uniqueTeachers);
 
             const uniqueAssignments = data.reduce((acc, assignment) => {
-                // Ensure assignments are stored/compared using their trimmed names
-                const trimmedClassName = assignment.className.trim();
-                const existing = acc.find(a => a.className === trimmedClassName);
-                
+                const existing = acc.find(a => a.className === assignment.className);
                 if (existing) {
                     assignment.subjects.forEach(subject => {
                         if (!existing.subjects.includes(subject)) {
@@ -68,16 +68,14 @@ const GradesAuditPage = () => {
                         }
                     });
                 } else {
-                    acc.push({ ...assignment, className: trimmedClassName, subjects: [...assignment.subjects] });
+                    acc.push({ ...assignment, subjects: [...assignment.subjects] });
                 }
                 return acc;
             }, []).sort((a, b) => a.className.localeCompare(b.className));
-            
             setAssignments(uniqueAssignments);
 
             if (uniqueAssignments.length > 0) {
                 if (!selectedClass || !uniqueAssignments.some(a => a.className === selectedClass)) {
-                    // Set initial selection to the first *trimmed* class
                     setSelectedClass(uniqueAssignments[0].className);
                     setSelectedSubject(uniqueAssignments[0].subjects[0]);
                 }
@@ -86,48 +84,62 @@ const GradesAuditPage = () => {
         return () => unsub();
     }, [schoolId, selectedClass]);
 
-    // --- 2️⃣ Fetch latest academic year ---
+    // --- 2️⃣ Fetch Academic Years FOR THIS SPECIFIC SCHOOL ONLY ---
     useEffect(() => {
-        const q = query(collection(db, "PupilsReg"), orderBy("academicYear", "desc"), limit(1));
+        if (!schoolId || schoolId === "N/A") return;
+
+        const q = query(
+            collection(db, "PupilsReg"), 
+            where("schoolId", "==", schoolId)
+        );
+
         const unsub = onSnapshot(q, (snapshot) => {
             if (!snapshot.empty) {
-                setAcademicYear(snapshot.docs[0].data().academicYear);
+                // Extract unique academic years for this specific school
+                const years = snapshot.docs
+                    .map((doc) => doc.data().academicYear)
+                    .filter((year) => Boolean(year));
+
+                // Sort unique academic years descending (newest first)
+                const sortedUniqueYears = [...new Set(years)].sort().reverse();
+                
+                setAcademicYearOptions(sortedUniqueYears);
+
+                // Default to the latest year if not selected or invalid
+                if (sortedUniqueYears.length > 0) {
+                    setAcademicYear((prev) => 
+                        sortedUniqueYears.includes(prev) ? prev : sortedUniqueYears[0]
+                    );
+                }
+            } else {
+                setAcademicYearOptions([]);
+                setAcademicYear("");
             }
         });
+
         return () => unsub();
-    }, []);
+    }, [schoolId]);
 
-    // --- 3️⃣ Fetch pupils for selected class (FIXED: Client-side filtering) ---
+    // --- 3️⃣ Fetch pupils for selected class ---
     useEffect(() => {
-        // We use the already-trimmed `selectedClass` state value
-        const trimmedClass = selectedClass;
-
-        if (!trimmedClass || !academicYear || !schoolId) {
+        if (!selectedClass || !academicYear || !schoolId) {
             setPupils([]);
             return;
         }
 
-        // 🚨 FIX: Query all pupils for the school/year, as the 'class' field might be untrimmed.
         const pupilsQuery = query(
             collection(db, "PupilsReg"),
+            where("class", "==", selectedClass),
             where("academicYear", "==", academicYear),
             where("schoolId", "==", schoolId)
         );
 
         const unsub = onSnapshot(pupilsQuery, (snapshot) => {
-            const allPupilsData = snapshot.docs.map((doc) => ({
-                id: doc.id,
-                studentID: doc.id,
-                ...doc.data()
-            }));
-
-            // ✅ FILTER LOCALLY: Filter the results where the stored class (after trimming)
-            // matches the clean 'trimmedClass' state value.
-            const filteredPupils = allPupilsData
-                .filter(pupil => pupil.class && pupil.class.trim() === trimmedClass)
+            const data = snapshot.docs
+                .map((doc) => ({ id: doc.id, studentID: doc.id, ...doc.data() }))
                 .sort((a, b) => a.studentName?.localeCompare(b.studentName));
 
-            setPupils(filteredPupils);
+            setPupils(data);
 
             // Load pending updates from localforage
             gradesStore.getItem("pendingUpdates").then((pending) => {
@@ -138,22 +150,19 @@ const GradesAuditPage = () => {
         return () => unsub();
     }, [selectedClass, academicYear, schoolId]);
 
-    // --- 4️⃣ Fetch grades with caching (Uses trimmedClass, which is correct) ---
+    // --- 4️⃣ Fetch grades with caching ---
     const fetchGrades = useCallback(async () => {
-        const trimmedClass = selectedClass; // Already trimmed from state
-
-        if (!trimmedClass || !selectedSubject || !selectedTest || !academicYear || !schoolId) {
+        if (!selectedClass || !selectedSubject || !selectedTest || !academicYear || !schoolId) {
             setCurrentGrades({});
             setUpdatedGrades({});
             return;
         }
 
-        const cacheKey = `${schoolId}_${trimmedClass}_${selectedSubject}_${selectedTest}_${academicYear}`;
+        const cacheKey = `${schoolId}_${selectedClass}_${selectedSubject}_${selectedTest}_${academicYear}`;
 
         try {
             const cachedGrades = await gradesStore.getItem(cacheKey);
             if (cachedGrades) {
-                console.log("📥 Loaded grades from local cache");
                 setCurrentGrades(cachedGrades);
             }
         } catch (err) {
@@ -163,8 +172,7 @@ const GradesAuditPage = () => {
         try {
             let gradeQuery = query(
                 collection(schooldb, "PupilGrades"),
-                // This assumes your previous fix ensured 'PupilGrades' entries are written with trimmed names
-                where("className", "==", trimmedClass), 
+                where("className", "==", selectedClass),
                 where("subject", "==", selectedSubject),
                 where("test", "==", selectedTest),
                 where("academicYear", "==", academicYear),
@@ -225,9 +233,6 @@ const GradesAuditPage = () => {
         const gradeData = currentGrades[pupilID];
         const newGradeValue = updatedGrades[pupilID];
 
-        // The class name is already trimmed since the state is updated with trimmed values
-        const cleanedClass = selectedClass; 
-
         try {
             if (gradeData && newGradeValue === null) {
                 if (!window.confirm(`Delete grade for ${pupilID}?`)) { setSubmitting(false); return; }
@@ -246,7 +251,7 @@ const GradesAuditPage = () => {
                     const docRef = doc(collection(schooldb, "PupilGrades"));
                     await setDoc(docRef, {
                         pupilID,
-                        className: cleanedClass, // Write the clean, trimmed value
+                        className: selectedClass,
                         subject: selectedSubject,
                         teacher: "Admin Override",
                         grade: newGradeValue,
@@ -280,7 +285,7 @@ const GradesAuditPage = () => {
         }
     };
 
-    // --- 7️⃣ Download PDF (uses state values) ---
+    // --- 7️⃣ Download PDF ---
     const handleDownloadPDF = () => {
         if (pupils.length === 0) {
             alert("No data to generate PDF");
@@ -305,10 +310,7 @@ const GradesAuditPage = () => {
             const gradeInfo = currentGrades[pupil.studentID];
             const grade = gradeInfo?.grade || "N/A";
             const teacher = gradeInfo?.teacher || "N/A";
-            
-            // Only include pupils that have a grade or a pending update
             if (grade === "N/A" && !updatedGrades.hasOwnProperty(pupil.studentID)) return null;
-            
             const displayGrade = updatedGrades.hasOwnProperty(pupil.studentID) 
                                  ? (updatedGrades[pupil.studentID] === null ? "DELETED" : updatedGrades[pupil.studentID])
                                  : grade;
@@ -332,10 +334,31 @@ const GradesAuditPage = () => {
         <div className="max-w-7xl mx-auto p-6 bg-white rounded-2xl shadow-xl relative">
             <h2 className="text-3xl font-bold mb-4 text-center text-blue-700">⭐ Admin Grade Audit & Management</h2>
             <p className="mb-6 text-gray-700 font-medium border-b pb-3">
-                School ID: <span className="font-bold">{schoolId}</span> | Academic Year: <span className="font-bold">{academicYear}</span>
+                School ID: <span className="font-bold">{schoolId}</span> | Academic Year: <span className="font-bold">{academicYear || "N/A"}</span>
             </p>
+            
             {/* Selector Row */}
-            <div className="flex gap-4 mb-6 items-end border p-3 rounded-lg bg-gray-50">
+            <div className="flex gap-4 mb-6 items-end border p-3 rounded-lg bg-gray-50 flex-wrap">
+                {/* Academic Year Dropdown */}
+                <div className="flex-1 min-w-[200px]">
+                    <label className="font-semibold text-gray-700 block mb-1">Academic Year:</label>
+                    <select
+                        value={academicYear}
+                        onChange={(e) => setAcademicYear(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-400 bg-white shadow-sm font-semibold text-blue-900"
+                    >
+                        {academicYearOptions.length === 0 ? (
+                            <option value="">No years found</option>
+                        ) : (
+                            academicYearOptions.map((year, i) => (
+                                <option key={i} value={year}>
+                                    {year} {i === 0 ? "(Current / Latest)" : ""}
+                                </option>
+                            ))
+                        )}
+                    </select>
+                </div>
+
                 <div className="flex-1 min-w-[200px]">
                     <label className="font-semibold text-gray-700 block mb-1">Filter by Teacher:</label>
                     <select
@@ -347,6 +370,7 @@ const GradesAuditPage = () => {
                         {allTeachers.map((name, i) => <option key={i} value={name}>{name}</option>)}
                     </select>
                 </div>
+                
                 <div className="flex-1 min-w-[200px]">
                     <label className="font-semibold text-gray-700 block mb-1">Select Test:</label>
                     <select
@@ -357,7 +381,8 @@ const GradesAuditPage = () => {
                         {tests.map((test, i) => <option key={i} value={test}>{test}</option>)}
                     </select>
                 </div>
-                <div className="flex-1">
+                
+                <div className="flex-1 min-w-[200px]">
                     <button
                         onClick={handleDownloadPDF}
                         className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-all shadow-md"
@@ -366,6 +391,7 @@ const GradesAuditPage = () => {
                     </button>
                 </div>
             </div>
+
             {/* Class & Subject Tabs */}
             <div className="mb-6 border-t pt-4">
                 <p className="font-semibold text-gray-700 mb-2">Filter by Class:</p>
@@ -374,11 +400,7 @@ const GradesAuditPage = () => {
                         {assignments.map((a) => (
                             <button key={a.className}
                                 className={`px-4 py-2 rounded-full text-sm font-medium transition-colors shadow-sm ${selectedClass === a.className ? "bg-blue-600 text-white shadow-blue-300" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
-                                onClick={() => { 
-                                    // Class name is already trimmed in assignment list (Step 1)
-                                    setSelectedClass(a.className); 
-                                    setSelectedSubject(a.subjects[0]); 
-                                }}>
+                                onClick={() => { setSelectedClass(a.className); setSelectedSubject(a.subjects[0]); }}>
                                 {a.className}
                             </button>
                         ))}
@@ -398,9 +420,9 @@ const GradesAuditPage = () => {
 
             {/* Pupils Table */}
             <h3 className="text-xl font-bold mt-8 mb-4 border-b pb-2 text-gray-800">
-                Grades for: {selectedClass} - {selectedSubject} ({selectedTest})
+                Grades for: {selectedClass} - {selectedSubject} ({selectedTest}) | {academicYear}
             </h3>
-             <div className="overflow-x-auto shadow-lg rounded-xl">
+            <div className="overflow-x-auto shadow-lg rounded-xl">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                     <thead className="bg-blue-50 text-blue-800 sticky top-0">
                         <tr>
@@ -416,7 +438,7 @@ const GradesAuditPage = () => {
                         {pupils.length === 0 ? (
                             <tr>
                                 <td colSpan="6" className="text-center py-8 text-gray-500 bg-gray-50">
-                                    No pupils found for the selected class.
+                                    No pupils found for {selectedClass} ({academicYear}).
                                 </td>
                             </tr>
                         ) : (
@@ -426,8 +448,6 @@ const GradesAuditPage = () => {
                                 const isModified = updatedGrades.hasOwnProperty(pupil.studentID);
                                 const isNewGrade = !gradeInfo && displayGrade !== "";
                                 const newGradeValue = updatedGrades[pupil.studentID];
-                                
-                                // Disable action on the current row if any other row is submitting
                                 const actionDisabled = submitting; 
 
                                 return (
@@ -452,16 +472,15 @@ const GradesAuditPage = () => {
                                             {gradeInfo?.teacher || (isNewGrade ? "Admin Override (New)" : "N/A")}
                                         </td>
                                         <td className="px-4 py-3 text-center">
-                                            {/* Action Button: Visible only if modified or new grade */}
                                             {isModified || isNewGrade ? (
                                                 <button
                                                     onClick={() => handleAdminAction(pupil.studentID)}
                                                     className={`px-3 py-1 text-xs rounded transition-colors font-semibold ${
-                                                         actionDisabled
+                                                        actionDisabled
                                                             ? "bg-gray-400 cursor-wait"
                                                             : (newGradeValue === null && gradeInfo)
-                                                            ? "bg-red-600 hover:bg-red-700 text-white" // Deletion
-                                                            : "bg-orange-500 hover:bg-orange-600 text-white" // Update/New
+                                                            ? "bg-red-600 hover:bg-red-700 text-white"
+                                                            : "bg-orange-500 hover:bg-orange-600 text-white"
                                                     }`}
                                                     disabled={actionDisabled}
                                                     title={
@@ -489,7 +508,6 @@ const GradesAuditPage = () => {
                     </tbody>
                 </table>
             </div>
-            
         </div>
     );
 };
