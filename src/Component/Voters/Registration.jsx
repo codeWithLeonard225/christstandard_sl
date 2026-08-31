@@ -208,7 +208,8 @@ const Registration = () => {
     const TODAY_DATE = useMemo(() => new Date().toISOString().slice(0, 10), []);
     const [currentFilter, setCurrentFilter] = useState({
         date: TODAY_DATE,
-        class: "All"
+        class: "All",
+        academicYear: "All"
     });
 
     const handleDateFilterChange = (date) => {
@@ -219,11 +220,19 @@ const Registration = () => {
         setCurrentFilter(prev => ({ ...prev, class: className }));
     };
 
+    const handleAcademicYearFilterChange = (academicYear) => {
+        setCurrentFilter(prev => ({
+            ...prev,
+            academicYear
+        }));
+    };
+
     const handleResetFilters = () => {
         setSearchTerm("");
         setCurrentFilter({
-            date: TODAY_DATE, // Reset to today
-            class: "All"
+            date: TODAY_DATE,
+            class: "All",
+            academicYear: "All"
         });
         toast.info("Filters reset to show today's registrations.");
     };
@@ -241,6 +250,14 @@ const Registration = () => {
         if (currentFilter.class !== "All") {
             filtered = filtered.filter(user => user.class === currentFilter.class);
         }
+
+        // 3. Filter by Academic Year
+        if (currentFilter.academicYear !== "All") {
+            filtered = filtered.filter(
+                user => user.academicYear === currentFilter.academicYear
+            );
+        }
+
         // 3. Filter by Search Term
         if (lowerCaseSearchTerm.trim() !== "") {
             filtered = filtered.filter(user => {
@@ -372,7 +389,7 @@ const Registration = () => {
                 gender: formData.gender,
                 addressLine1: formData.addressLine1,
                 addressLine2: formData.addressLine2,
-                 houseColor: formData.houseColor, // ✅ NEW
+                houseColor: formData.houseColor, // ✅ NEW
                 parentName: formData.parentName,
                 parentPhone: formData.parentPhone,
                 class: formData.class,
@@ -483,7 +500,7 @@ const Registration = () => {
             toast.error("Incorrect password.");
         }
     };
-    
+
     // ⭐ NEW FUNCTION: Handle Navigation for Print Form ⭐
     const handlePrint = (user) => {
         // Navigate to the print route, passing all student data in the state
@@ -684,18 +701,18 @@ const Registration = () => {
                         </select>
                     </div>
                     <div className="flex-1">
-    <label className="block mb-2 font-medium text-sm">
-        House Color
-    </label>
-    <input
-        type="text"
-        name="houseColor"
-        value={formData.houseColor}
-        onChange={handleInputChange}
-        placeholder="Enter house color"
-        className="w-full p-2 mb-4 border rounded-lg"
-    />
-</div>
+                        <label className="block mb-2 font-medium text-sm">
+                            House Color
+                        </label>
+                        <input
+                            type="text"
+                            name="houseColor"
+                            value={formData.houseColor}
+                            onChange={handleInputChange}
+                            placeholder="Enter house color"
+                            className="w-full p-2 mb-4 border rounded-lg"
+                        />
+                    </div>
 
 
                 </div>
@@ -772,6 +789,24 @@ const Registration = () => {
                                 ))}
                             </select>
                         </div>
+                        <div className="flex-1">
+                            <label className="block mb-1 text-xs font-medium text-gray-700">
+                                Filter by Academic Year
+                            </label>
+
+                            <select
+                                value={currentFilter.academicYear}
+                                onChange={(e) =>
+                                    handleAcademicYearFilterChange(e.target.value)
+                                }
+                                className="w-full p-2 border border-gray-300 rounded-lg"
+                            >
+                                <option value="All">All Academic Years</option>
+                                <option value="2025/2026">2025/2026</option>
+                                <option value="2026/2027">2026/2027</option>
+                                <option value="2027/2028">2027/2028</option>
+                            </select>
+                        </div>
                         <button
                             type="button"
                             onClick={handleResetFilters}
@@ -794,7 +829,7 @@ const Registration = () => {
                                 {/* <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Gender</th> */}
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">AcademicYear</th>
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Photo</th>
-                              
+
 
                                 <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
@@ -814,7 +849,7 @@ const Registration = () => {
                                             <img src={user.userPhotoUrl} alt={user.studentName} className="h-10 w-10 rounded-full object-cover" />
                                         )}
                                     </td>
-                                 
+
 
                                     <td className="px-3 py-4 whitespace-nowrap text-sm font-medium flex items-center space-x-2">
                                         <button onClick={() => handleUpdate(user)} className="text-indigo-600 hover:text-indigo-900">

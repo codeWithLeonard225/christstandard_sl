@@ -61,6 +61,12 @@ import PayrollPage from "../TeacherAssignment/PayrollPage";
 import YearlyGeneralReportCard from "../TeacherAssignment/YearlyGeneralReportCard";
 import StaffAttendanceProfileReport from "../TeacherAssignment/StaffAttendanceProfileReport";
 import ClassPromotion from "../Voters/ClassPromotion";
+import TeacherIDCards from "../Staff/TeacherIDCards";
+import StaffAttendanceScanner from "../Staff/StaffAttendanceScanner";
+import StaffAttendanceRecords from "../Staff/StaffAttendanceRecords";
+import PupilIDCardScan from "../PupilsPage/PupilIDCardScan";
+import PupilAttendanceScanner from "../PupilsPage/PupilAttendanceScanner";
+import PupilAttendanceLogs from "../PupilsPage/PupilAttendanceLogs";
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
@@ -72,7 +78,7 @@ const NAV_ITEMS = [
       { key: "Form", label: " Pupils", icon: <MdPerson /> },
       { key: "class", label: " Class", icon: <MdPerson /> },
       { key: "classList", label: "Class List", icon: <MdPerson /> },
-          { key: "ClassPromotion", label: " ClassPromotion", icon: <MdPerson /> },
+      { key: "ClassPromotion", label: " ClassPromotion", icon: <MdPerson /> },
     ],
   },
   {
@@ -99,7 +105,7 @@ const NAV_ITEMS = [
 
     ],
   },
-   {
+  {
     key: "results",
     label: "Pupils Results",
     icon: <MdBarChart />,
@@ -108,11 +114,11 @@ const NAV_ITEMS = [
       { key: "TeacherPupilsPageAdmin", label: "TeacherPupilsGrade", icon: <MdPerson /> },
       { key: "SubGradeMatrixPage", label: "Sub Grade Sheet", icon: <MdPerson /> },
       { key: "ClassFullTermMatrixPage", label: "Term Grade Sheet", icon: <MdPerson /> },
-         { key: "ReportCardTermly", label: "ReportCard Termly", icon: <MdPerson /> },
+      { key: "ReportCardTermly", label: "ReportCard Termly", icon: <MdPerson /> },
       { key: "GeneralReportCard", label: "ReportCard Yearly", icon: <MdPerson /> },
       { key: "TermResult", label: "TermResult GradeSheet", icon: <MdPerson /> },
-       { key: "YearlyResult", label: "Yearly GradeSheet", icon: <MdPerson /> },
-             { key: "YearlyGeneralReportCard", label: "YearlyGeneralReportCard", icon: <MdPerson /> },
+      { key: "YearlyResult", label: "Yearly GradeSheet", icon: <MdPerson /> },
+      { key: "YearlyGeneralReportCard", label: "YearlyGeneralReportCard", icon: <MdPerson /> },
       // { key: "Testing", label: "Testing", icon: <MdPerson /> },
 
     ],
@@ -129,31 +135,39 @@ const NAV_ITEMS = [
     ],
   },
   {
-    key: "idcards",
-    label: "Pupils ID Cards",
+    key: "qrcode-Pupil",
+    label: "Qr code Attendance-Pupil",
     icon: <MdBarChart />,
     children: [
-      { key: "PupilIDCard", label: "PupilIDCard", icon: <MdPerson /> },
-      { key: "IDCardPage", label: "IDCardPage", icon: <MdPerson /> },
-
-      // { key: "Testing", label: "Testing", icon: <MdPerson /> },
-
+      // { key: "PupilIDCardScan", label: "Pupil Card Scan", icon: <MdPerson /> },
+      { key: "PupilAttendanceScanner", label: "Attendance Scanner", icon: <MdPerson /> },
+      { key: "PupilAttendanceLogs", label: "Pupil Attendance Logs", icon: <MdPerson /> },
+    ],
+  },
+  {
+    key: "qrcode-Staff",
+    label: "Qr code Attendance-Staff",
+    icon: <MdBarChart />,
+    children: [
+      // { key: "TeacherIDCards", label: "Teacher IDCards", icon: <MdPerson /> },
+      { key: "StaffAttendanceScanner", label: "Staff Attendance Scanner", icon: <MdPerson /> },
+      { key: "StaffAttendanceRecords", label: "Staff Attendance Records", icon: <MdPerson /> },
     ],
   },
 
-     {
+  {
     key: "pupilAttendance",
     label: "Pupil Attendance",
     icon: <MdWarning />, // 📖
   },
 
-    {
+  {
     key: "staffAttendance",
     label: "Staff Attendance",
     icon: <MdWarning />, // 📖
   },
 
-    {
+  {
     key: "StaffAttendanceProfileReport",
     label: "Staff Attendance Report",
     icon: <MdWarning />, // 📖
@@ -164,7 +178,7 @@ const NAV_ITEMS = [
   //   icon: <MdWarning />, // 📖
   // },
 
-   {
+  {
     key: "timetable",
     label: "TimeTable",
     icon: <MdBarChart />,
@@ -177,12 +191,12 @@ const NAV_ITEMS = [
 
     ],
   },
-   {
+  {
     key: "BankFeesPage",
     label: "Bank Report",
     icon: <MdWarning />, // 📖
   },
-   {
+  {
     key: "LogoutPage",
     label: "Logout",
     icon: <MdWarning />, // 📖
@@ -279,7 +293,7 @@ function AdminPanel() {
       case "beceResult": return <NationalResultPage />;
       case "beceReport": return <BECEStatementOfResult />;
       case "GeneralReportCard": return <GeneralReportCard />;
-       case "ReportCardTermly": return <ReportCardTermly />;
+      case "ReportCardTermly": return <ReportCardTermly />;
       case "TermResult": return <TermResult />;
       case "YearlyResult": return <YearlyResult />;
       case "YearlyGeneralReportCard": return <YearlyGeneralReportCard />;
@@ -303,6 +317,12 @@ function AdminPanel() {
       case "FixClassNames": return <FixClassNames />;
       case "BankFeesPage": return <BankFeesPage />;
       case "ClassPromotion": return <ClassPromotion />;
+      case "TeacherIDCards": return <TeacherIDCards />;
+      case "StaffAttendanceScanner": return <StaffAttendanceScanner />;
+      case "StaffAttendanceRecords": return <StaffAttendanceRecords />;
+      case "PupilIDCardScan": return <PupilIDCardScan />;
+      case "PupilAttendanceScanner": return <PupilAttendanceScanner />;
+      case "PupilAttendanceLogs": return <PupilAttendanceLogs />;
 
       default: return <Placeholder title={activeTab} />;
     }
