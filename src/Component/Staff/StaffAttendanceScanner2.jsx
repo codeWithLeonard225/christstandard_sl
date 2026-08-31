@@ -91,16 +91,12 @@ const StaffAttendanceScanner = () => {
         return record?.isFinal === true;
     };
 
-    const handleScanSuccess = async (rawText) => {
+ const handleScanSuccess = async (rawText) => {
     if (isProcessing) return;
     setIsProcessing(true);
 
     if (html5QrCodeRef.current) {
-        try { 
-            html5QrCodeRef.current.pause(true); 
-        } catch (e) { 
-            console.error("Pause failed:", e); 
-        }
+        try { html5QrCodeRef.current.pause(true); } catch (e) { console.error("Pause failed:", e); }
     }
 
     try {
@@ -143,15 +139,12 @@ const StaffAttendanceScanner = () => {
         const logSnap = await getDocs(qLog);
         const currentMode = attendanceTypeRef.current;
 
-        // MODE 1: CLOCK-IN
         if (currentMode === "clock-in") {
             if (!logSnap.empty) {
                 const existing = logSnap.docs[0].data();
 
                 if (isAttendanceLocked(existing)) {
-                    toast.error(
-                        `🚫 ${teacherDoc.teacherName} already has finalized attendance (${existing.status}).`
-                    );
+                    toast.error(`🚫 ${teacherDoc.teacherName} already has finalized attendance (${existing.status}).`);
                     setScannedResult({
                         name: teacherDoc.teacherName,
                         status: `Blocked: Finalized (${existing.status})`,
@@ -185,7 +178,7 @@ const StaffAttendanceScanner = () => {
                 return;
             }
 
-            // Check cut-off time and calculate status (Present vs Late vs Absent)
+            // --- EXECUTE CLOCK-IN LOGIC ---
             const { status, allowed, reason } = getClockInStatus(now);
 
             if (!allowed) {
@@ -194,13 +187,12 @@ const StaffAttendanceScanner = () => {
                     name: teacherDoc.teacherName,
                     status: `Blocked: ${reason}`,
                     time: timeStr,
-                    note: reason,
+                    note: null,
                     isError: true
                 });
                 return;
             }
 
-            // Save standard clock-in document
             await addDoc(collection(db, "StaffAttendance"), {
                 teacherID,
                 teacherName: teacherDoc.teacherName,
@@ -215,16 +207,15 @@ const StaffAttendanceScanner = () => {
                 timestamp: serverTimestamp()
             });
 
-            toast.success(`🟢 ${teacherDoc.teacherName} Clocked In (${status}) at ${timeStr}`);
+            toast.success(`🟢 ${teacherDoc.teacherName} Clocked In as ${status} at ${timeStr}`);
             setScannedResult({
                 name: teacherDoc.teacherName,
-                status: `Clocked In Successfully (${status})`,
+                status: `Clocked In (${status})`,
                 time: timeStr,
                 note: null,
-                isError: false,
+                isError: false
             });
 
-        // MODE 2: CLOCK-OUT
         } else if (currentMode === "clock-out") {
             if (logSnap.empty) {
                 toast.error(`🚫 ${teacherDoc.teacherName} cannot clock out without a clock-in record today.`);
@@ -242,7 +233,7 @@ const StaffAttendanceScanner = () => {
             const existing = logSnap.docs[0].data();
 
             if (isAttendanceLocked(existing)) {
-                toast.error(`🚫 ${teacherDoc.teacherName} attendance has already been finalized.`);
+                toast.error(`🚫 ${teacherDoc.teacherName} attendance has already been finalized manually.`);
                 setScannedResult({
                     name: teacherDoc.teacherName,
                     status: "Blocked: Finalized Attendance",
@@ -275,28 +266,12 @@ const StaffAttendanceScanner = () => {
                 isError: false,
             });
 
-        // MODE 3 & 4: EXCUSE / LEAVE
         } else if (currentMode === "excuse" || currentMode === "leave") {
             const targetStatus = currentMode === "excuse" ? "Excused" : "On Leave";
 
             if (!logSnap.empty) {
                 const existing = logSnap.docs[0].data();
-
-                if (isAttendanceLocked(existing)) {
-                    toast.warning(
-                        `${teacherDoc.teacherName} already has a completed attendance record. Override requires manual action.`
-                    );
-                    setScannedResult({
-                        name: teacherDoc.teacherName,
-                        status: "Blocked: Attendance Already Finalized",
-                        time: existing.clockOutTime || existing.clockInTime || "N/A",
-                        note: existing.note,
-                        isError: true
-                    });
-                    return;
-                }
-
-                toast.warning(`${teacherDoc.teacherName} already has attendance logged for today.`);
+                toast.warning(`${teacherDoc.teacherName} already has attendance logged for today (${existing.status}).`);
                 return;
             }
 
@@ -337,14 +312,10 @@ const StaffAttendanceScanner = () => {
     } finally {
         setTimeout(() => {
             if (html5QrCodeRef.current) {
-                try { 
-                    html5QrCodeRef.current.resume(); 
-                } catch (e) { 
-                    console.error("Resume failed:", e); 
-                }
+                try { html5QrCodeRef.current.resume(); } catch (e) { console.error("Resume failed:", e); }
             }
             setIsProcessing(false);
-        }, 1000);
+        }, 1500);
     }
 };
 
