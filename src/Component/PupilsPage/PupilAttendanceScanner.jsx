@@ -140,94 +140,94 @@ const AttendanceScanner = () => {
     }, [activeTab]);
 
     // Automatically mark pupils as Absent at 3:00 PM
-    useEffect(() => {
-        if (!currentSchoolId || pupilsList.length === 0) return;
+    // useEffect(() => {
+    //     if (!currentSchoolId || pupilsList.length === 0) return;
 
-        const markAbsentPupils = async () => {
-            const now = new Date();
+    //     const markAbsentPupils = async () => {
+    //         const now = new Date();
 
-            const currentMinutes =
-                now.getHours() * 60 + now.getMinutes();
+    //         const currentMinutes =
+    //             now.getHours() * 60 + now.getMinutes();
 
-            const schoolClosingMinutes = 15 * 60; // 3:00 PM
+    //         const schoolClosingMinutes = 15 * 60; // 3:00 PM
 
-            // Only run at or after 3:00 PM
-            if (currentMinutes < schoolClosingMinutes) {
-                return;
-            }
+    //         // Only run at or after 3:00 PM
+    //         if (currentMinutes < schoolClosingMinutes) {
+    //             return;
+    //         }
 
-            const todayStr = now.toISOString().slice(0, 10);
+    //         const todayStr = now.toISOString().slice(0, 10);
 
-            try {
-                console.log("Checking pupils for automatic absence...");
+    //         try {
+    //             console.log("Checking pupils for automatic absence...");
 
-                for (const pupil of pupilsList) {
-                    if (!pupil.studentID) continue;
+    //             for (const pupil of pupilsList) {
+    //                 if (!pupil.studentID) continue;
 
-                    const attendanceId =
-                        `${currentSchoolId}_${pupil.studentID}_${todayStr}`;
+    //                 const attendanceId =
+    //                     `${currentSchoolId}_${pupil.studentID}_${todayStr}`;
 
-                    const attendanceRef = doc(
-                        db,
-                        "AttendanceLogs",
-                        attendanceId
-                    );
+    //                 const attendanceRef = doc(
+    //                     db,
+    //                     "AttendanceLogs",
+    //                     attendanceId
+    //                 );
 
-                    const attendanceSnap = await getDoc(attendanceRef);
+    //                 const attendanceSnap = await getDoc(attendanceRef);
 
-                    // IMPORTANT:
-                    // If ANY attendance record already exists,
-                    // do not touch it.
-                    if (attendanceSnap.exists()) {
-                        continue;
-                    }
+    //                 // IMPORTANT:
+    //                 // If ANY attendance record already exists,
+    //                 // do not touch it.
+    //                 if (attendanceSnap.exists()) {
+    //                     continue;
+    //                 }
 
-                    await setDoc(attendanceRef, {
-                        studentID: pupil.studentID,
-                        studentName: pupil.studentName,
-                        class: pupil.class || "",
-                        academicYear: pupil.academicYear || "",
-                        userPhotoUrl: pupil.userPhotoUrl || "",
-                        schoolId: currentSchoolId,
-                        date: todayStr,
+    //                 await setDoc(attendanceRef, {
+    //                     studentID: pupil.studentID,
+    //                     studentName: pupil.studentName,
+    //                     class: pupil.class || "",
+    //                     academicYear: pupil.academicYear || "",
+    //                     userPhotoUrl: pupil.userPhotoUrl || "",
+    //                     schoolId: currentSchoolId,
+    //                     date: todayStr,
 
-                        clockInTime: null,
-                        clockOutTime: null,
+    //                     clockInTime: null,
+    //                     clockOutTime: null,
 
-                        status: "Absent",
+    //                     status: "Absent",
 
-                        note: "No clock-in recorded before 3:00 PM school closing time",
+    //                     note: "No clock-in recorded before 3:00 PM school closing time",
 
-                        loggedBy: "Automatic Attendance System",
+    //                     loggedBy: "Automatic Attendance System",
 
-                        createdAt: serverTimestamp(),
-                    });
+    //                     createdAt: serverTimestamp(),
+    //                 });
 
-                    console.log(
-                        `${pupil.studentName} automatically marked Absent`
-                    );
-                }
+    //                 console.log(
+    //                     `${pupil.studentName} automatically marked Absent`
+    //                 );
+    //             }
 
-                console.log("Automatic absence check completed.");
-            } catch (error) {
-                console.error(
-                    "Error automatically marking pupils absent:",
-                    error
-                );
-            }
-        };
+    //             console.log("Automatic absence check completed.");
+    //         } catch (error) {
+    //             console.error(
+    //                 "Error automatically marking pupils absent:",
+    //                 error
+    //             );
+    //         }
+    //     };
 
-        // Check immediately
-        markAbsentPupils();
+    //     // Check immediately
+    //     markAbsentPupils();
 
-        // Check every minute
-        const interval = setInterval(() => {
-            markAbsentPupils();
-        }, 60 * 1000);
+    //     // Check every minute
+    //     const interval = setInterval(() => {
+    //         markAbsentPupils();
+    //     }, 60 * 1000);
 
-        return () => clearInterval(interval);
+    //     return () => clearInterval(interval);
 
-    }, [currentSchoolId, pupilsList]);
+    // }, [currentSchoolId, pupilsList]);
 
     // Helper: Compute status based on arrival time
     // Pupil attendance time rules
