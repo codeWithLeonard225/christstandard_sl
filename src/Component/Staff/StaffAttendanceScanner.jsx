@@ -81,8 +81,10 @@ const StaffAttendanceScanner = () => {
         });
 
         return () => {
-            if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-                html5QrCodeRef.current.stop().catch(e => console.error("Stop failed", e));
+            if (html5QrCodeRef.current) {
+                if (html5QrCodeRef.current.isScanning) {
+                    html5QrCodeRef.current.stop().catch(e => console.error("Stop failed", e));
+                }
             }
         };
     }, []);
@@ -92,70 +94,161 @@ const StaffAttendanceScanner = () => {
     };
 
     const handleScanSuccess = async (rawText) => {
-    if (isProcessing) return;
-    setIsProcessing(true);
+        if (isProcessing) return;
+        setIsProcessing(true);
 
-    if (html5QrCodeRef.current) {
-        try { 
-            html5QrCodeRef.current.pause(true); 
-        } catch (e) { 
-            console.error("Pause failed:", e); 
+        if (html5QrCodeRef.current) {
+            try { 
+                html5QrCodeRef.current.pause(true); 
+            } catch (e) { 
+                console.error("Pause failed:", e); 
+            }
         }
-    }
 
-    try {
-        let parsedData;
         try {
-            parsedData = JSON.parse(rawText);
-        } catch (e) {
-            parsedData = { teacherID: rawText };
-        }
+            let parsedData;
+            try {
+                parsedData = JSON.parse(rawText);
+            } catch (e) {
+                parsedData = { teacherID: rawText };
+            }
 
-        const { teacherID } = parsedData;
-        if (!teacherID) {
-            toast.error("Invalid QR Code payload.");
-            return;
-        }
+            const { teacherID } = parsedData;
+            if (!teacherID) {
+                toast.error("Invalid QR Code payload.");
+                return;
+            }
 
-        const qTeacher = query(
-            collection(db, "Teachers"),
-            where("teacherID", "==", teacherID),
-            where("schoolId", "==", schoolId)
-        );
-        const teacherSnap = await getDocs(qTeacher);
+            const qTeacher = query(
+                collection(db, "Teachers"),
+                where("teacherID", "==", teacherID),
+                where("schoolId", "==", schoolId)
+            );
+            const teacherSnap = await getDocs(qTeacher);
 
-        if (teacherSnap.empty) {
-            toast.error(`Teacher ID ${teacherID} not found.`);
-            return;
-        }
+            if (teacherSnap.empty) {
+                toast.error(`Teacher ID ${teacherID} not found.`);
+                return;
+            }
 
-        const teacherDoc = teacherSnap.docs[0].data();
-        const now = new Date();
-        const todayStr = now.toLocaleDateString("en-CA");
-        const timeStr = now.toLocaleTimeString();
+            const teacherDoc = teacherSnap.docs[0].data();
+            const now = new Date();
+            const todayStr = now.toLocaleDateString("en-CA");
+            const timeStr = now.toLocaleTimeString();
 
-        const qLog = query(
-            collection(db, "StaffAttendance"),
-            where("teacherID", "==", teacherID),
-            where("date", "==", todayStr),
-            where("schoolId", "==", schoolId)
-        );
-        const logSnap = await getDocs(qLog);
-        const currentMode = attendanceTypeRef.current;
+            const qLog = query(
+                collection(db, "StaffAttendance"),
+                where("teacherID", "==", teacherID),
+                where("date", "==", todayStr),
+                where("schoolId", "==", schoolId)
+            );
+            const logSnap = await getDocs(qLog);
+            const currentMode = attendanceTypeRef.current;
 
-        // MODE 1: CLOCK-IN
-        if (currentMode === "clock-in") {
-            if (!logSnap.empty) {
+            // MODE 1: CLOCK-IN
+            if (currentMode === "clock-in") {
+                if (!logSnap.empty) {
+                    const existing = logSnap.docs[0].data();
+
+                    if (isAttendanceLocked(existing)) {
+                        toast.error(
+                            `🚫 ${teacherDoc.teacherName} already has finalized attendance (${existing.status}).`
+                        );
+                        setScannedResult({
+                            name: teacherDoc.teacherName,
+                            status: `Blocked: Finalized (${existing.status})`,
+                            time: "N/A",
+                            note: existing.note,
+                            isError: true
+                        });
+                        return;
+                    }
+
+                    if (existing.clockOutTime) {
+                        toast.error(`🚫 ${teacherDoc.teacherName} has already clocked out today at ${existing.clockOutTime}.`);
+                        setScannedResult({
+                            name: teacherDoc.teacherName,
+                            status: "Blocked: Already Clocked Out Today",
+                            time: existing.clockOutTime,
+                            note: "Re-clock in prohibited after clock-out",
+                            isError: true,
+                        });
+                        return;
+                    }
+
+                    toast.warning(`🚫 ${teacherDoc.teacherName} is already clocked in today at ${existing.clockInTime || "N/A"}.`);
+                    setScannedResult({
+                        name: teacherDoc.teacherName,
+                        status: `Blocked: Already Clocked In (${existing.status})`,
+                        time: existing.clockInTime || "N/A",
+                        note: existing.note || null,
+                        isError: true,
+                    });
+                    return;
+                }
+
+                // Check cut-off time and calculate status (Present vs Late vs Absent)
+                const { status, allowed, reason } = getClockInStatus(now);
+
+                if (!allowed) {
+                    toast.error(`🚫 ${reason}`);
+                    setScannedResult({
+                        name: teacherDoc.teacherName,
+                        status: `Blocked: ${reason}`,
+                        time: timeStr,
+                        note: reason,
+                        isError: true
+                    });
+                    return;
+                }
+
+                // Save standard clock-in document
+                await addDoc(collection(db, "StaffAttendance"), {
+                    teacherID,
+                    teacherName: teacherDoc.teacherName,
+                    schoolId,
+                    date: todayStr,
+                    clockInTime: timeStr,
+                    clockOutTime: null,
+                    status: status, // "Present" or "Late"
+                    note: null,
+                    isFinal: false,
+                    finalizedBy: "scan",
+                    timestamp: serverTimestamp()
+                });
+
+                toast.success(`🟢 ${teacherDoc.teacherName} Clocked In (${status}) at ${timeStr}`);
+                setScannedResult({
+                    name: teacherDoc.teacherName,
+                    status: `Clocked In Successfully (${status})`,
+                    time: timeStr,
+                    note: null,
+                    isError: false,
+                });
+
+            // MODE 2: CLOCK-OUT
+            } else if (currentMode === "clock-out") {
+                if (logSnap.empty) {
+                    toast.error(`🚫 ${teacherDoc.teacherName} cannot clock out without a clock-in record today.`);
+                    setScannedResult({
+                        name: teacherDoc.teacherName,
+                        status: "Blocked: No Clock-In Record Today",
+                        time: "N/A",
+                        note: null,
+                        isError: true,
+                    });
+                    return;
+                }
+
+                const logDocRef = logSnap.docs[0].ref;
                 const existing = logSnap.docs[0].data();
 
                 if (isAttendanceLocked(existing)) {
-                    toast.error(
-                        `🚫 ${teacherDoc.teacherName} already has finalized attendance (${existing.status}).`
-                    );
+                    toast.error(`🚫 ${teacherDoc.teacherName} attendance has already been finalized.`);
                     setScannedResult({
                         name: teacherDoc.teacherName,
-                        status: `Blocked: Finalized (${existing.status})`,
-                        time: "N/A",
+                        status: "Blocked: Finalized Attendance",
+                        time: existing.clockOutTime || "N/A",
                         note: existing.note,
                         isError: true
                     });
@@ -163,194 +256,102 @@ const StaffAttendanceScanner = () => {
                 }
 
                 if (existing.clockOutTime) {
-                    toast.error(`🚫 ${teacherDoc.teacherName} has already clocked out today at ${existing.clockOutTime}.`);
+                    toast.warning(`🚫 ${teacherDoc.teacherName} has ALREADY clocked out today at ${existing.clockOutTime}.`);
                     setScannedResult({
                         name: teacherDoc.teacherName,
-                        status: "Blocked: Already Clocked Out Today",
+                        status: "Blocked: Clock-Out Already Completed Today",
                         time: existing.clockOutTime,
-                        note: "Re-clock in prohibited after clock-out",
+                        note: existing.note || null,
                         isError: true,
                     });
                     return;
                 }
 
-                toast.warning(`🚫 ${teacherDoc.teacherName} is already clocked in today at ${existing.clockInTime || "N/A"}.`);
+                await updateDoc(logDocRef, { clockOutTime: timeStr });
+                toast.success(`🔴 ${teacherDoc.teacherName} Clocked Out at ${timeStr}`);
                 setScannedResult({
                     name: teacherDoc.teacherName,
-                    status: `Blocked: Already Clocked In (${existing.status})`,
-                    time: existing.clockInTime || "N/A",
-                    note: existing.note || null,
-                    isError: true,
-                });
-                return;
-            }
-
-            // Check cut-off time and calculate status (Present vs Late vs Absent)
-            const { status, allowed, reason } = getClockInStatus(now);
-
-            if (!allowed) {
-                toast.error(`🚫 ${reason}`);
-                setScannedResult({
-                    name: teacherDoc.teacherName,
-                    status: `Blocked: ${reason}`,
+                    status: "Clocked Out Successfully",
                     time: timeStr,
-                    note: reason,
-                    isError: true
-                });
-                return;
-            }
-
-            // Save standard clock-in document
-            await addDoc(collection(db, "StaffAttendance"), {
-                teacherID,
-                teacherName: teacherDoc.teacherName,
-                schoolId,
-                date: todayStr,
-                clockInTime: timeStr,
-                clockOutTime: null,
-                status: status, // "Present" or "Late"
-                note: null,
-                isFinal: false,
-                finalizedBy: "scan",
-                timestamp: serverTimestamp()
-            });
-
-            toast.success(`🟢 ${teacherDoc.teacherName} Clocked In (${status}) at ${timeStr}`);
-            setScannedResult({
-                name: teacherDoc.teacherName,
-                status: `Clocked In Successfully (${status})`,
-                time: timeStr,
-                note: null,
-                isError: false,
-            });
-
-        // MODE 2: CLOCK-OUT
-        } else if (currentMode === "clock-out") {
-            if (logSnap.empty) {
-                toast.error(`🚫 ${teacherDoc.teacherName} cannot clock out without a clock-in record today.`);
-                setScannedResult({
-                    name: teacherDoc.teacherName,
-                    status: "Blocked: No Clock-In Record Today",
-                    time: "N/A",
-                    note: null,
-                    isError: true,
-                });
-                return;
-            }
-
-            const logDocRef = logSnap.docs[0].ref;
-            const existing = logSnap.docs[0].data();
-
-            if (isAttendanceLocked(existing)) {
-                toast.error(`🚫 ${teacherDoc.teacherName} attendance has already been finalized.`);
-                setScannedResult({
-                    name: teacherDoc.teacherName,
-                    status: "Blocked: Finalized Attendance",
-                    time: existing.clockOutTime || "N/A",
-                    note: existing.note,
-                    isError: true
-                });
-                return;
-            }
-
-            if (existing.clockOutTime) {
-                toast.warning(`🚫 ${teacherDoc.teacherName} has ALREADY clocked out today at ${existing.clockOutTime}.`);
-                setScannedResult({
-                    name: teacherDoc.teacherName,
-                    status: "Blocked: Clock-Out Already Completed Today",
-                    time: existing.clockOutTime,
                     note: existing.note || null,
-                    isError: true,
+                    isError: false,
                 });
-                return;
-            }
 
-            await updateDoc(logDocRef, { clockOutTime: timeStr });
-            toast.success(`🔴 ${teacherDoc.teacherName} Clocked Out at ${timeStr}`);
-            setScannedResult({
-                name: teacherDoc.teacherName,
-                status: "Clocked Out Successfully",
-                time: timeStr,
-                note: existing.note || null,
-                isError: false,
-            });
+            // MODE 3 & 4: EXCUSE / LEAVE
+            } else if (currentMode === "excuse" || currentMode === "leave") {
+                const targetStatus = currentMode === "excuse" ? "Excused" : "On Leave";
 
-        // MODE 3 & 4: EXCUSE / LEAVE
-        } else if (currentMode === "excuse" || currentMode === "leave") {
-            const targetStatus = currentMode === "excuse" ? "Excused" : "On Leave";
+                if (!logSnap.empty) {
+                    const existing = logSnap.docs[0].data();
 
-            if (!logSnap.empty) {
-                const existing = logSnap.docs[0].data();
+                    if (isAttendanceLocked(existing)) {
+                        toast.warning(
+                            `${teacherDoc.teacherName} already has a completed attendance record. Override requires manual action.`
+                        );
+                        setScannedResult({
+                            name: teacherDoc.teacherName,
+                            status: "Blocked: Attendance Already Finalized",
+                            time: existing.clockOutTime || existing.clockInTime || "N/A",
+                            note: existing.note,
+                            isError: true
+                        });
+                        return;
+                    }
 
-                if (isAttendanceLocked(existing)) {
-                    toast.warning(
-                        `${teacherDoc.teacherName} already has a completed attendance record. Override requires manual action.`
-                    );
-                    setScannedResult({
-                        name: teacherDoc.teacherName,
-                        status: "Blocked: Attendance Already Finalized",
-                        time: existing.clockOutTime || existing.clockInTime || "N/A",
-                        note: existing.note,
-                        isError: true
-                    });
+                    toast.warning(`${teacherDoc.teacherName} already has attendance logged for today.`);
                     return;
                 }
 
-                toast.warning(`${teacherDoc.teacherName} already has attendance logged for today.`);
-                return;
-            }
-
-            const notePrompt = window.prompt(`Enter reason for ${targetStatus}:`);
-            if (!notePrompt || !notePrompt.trim()) {
-                toast.error("Reason note is required.");
-                return;
-            }
-
-            await addDoc(collection(db, "StaffAttendance"), {
-                teacherID,
-                teacherName: teacherDoc.teacherName,
-                schoolId,
-                date: todayStr,
-                clockInTime: null,
-                clockOutTime: null,
-                status: targetStatus,
-                note: notePrompt.trim(),
-                isFinal: true,
-                finalizedBy: "scan",
-                finalizedAt: serverTimestamp(),
-                timestamp: serverTimestamp()
-            });
-
-            toast.success(`${teacherDoc.teacherName} marked ${targetStatus}`);
-            setScannedResult({
-                name: teacherDoc.teacherName,
-                status: targetStatus,
-                time: timeStr,
-                note: notePrompt.trim(),
-                isError: false
-            });
-        }
-
-    } catch (err) {
-        console.error("Scan processing error:", err);
-        toast.error("Error logging attendance.");
-    } finally {
-        setTimeout(() => {
-            if (html5QrCodeRef.current) {
-                try { 
-                    html5QrCodeRef.current.resume(); 
-                } catch (e) { 
-                    console.error("Resume failed:", e); 
+                const notePrompt = window.prompt(`Enter reason for ${targetStatus}:`);
+                if (!notePrompt || !notePrompt.trim()) {
+                    toast.error("Reason note is required.");
+                    return;
                 }
+
+                await addDoc(collection(db, "StaffAttendance"), {
+                    teacherID,
+                    teacherName: teacherDoc.teacherName,
+                    schoolId,
+                    date: todayStr,
+                    clockInTime: null,
+                    clockOutTime: null,
+                    status: targetStatus,
+                    note: notePrompt.trim(),
+                    isFinal: true,
+                    finalizedBy: "scan",
+                    finalizedAt: serverTimestamp(),
+                    timestamp: serverTimestamp()
+                });
+
+                toast.success(`${teacherDoc.teacherName} marked ${targetStatus}`);
+                setScannedResult({
+                    name: teacherDoc.teacherName,
+                    status: targetStatus,
+                    time: timeStr,
+                    note: notePrompt.trim(),
+                    isError: false
+                });
             }
-            setIsProcessing(false);
-        }, 1000);
-    }
-};
+
+        } catch (err) {
+            console.error("Scan processing error:", err);
+            toast.error("Error logging attendance.");
+        } finally {
+            setTimeout(() => {
+                if (html5QrCodeRef.current) {
+                    try { 
+                        html5QrCodeRef.current.resume(); 
+                    } catch (e) { 
+                        console.error("Resume failed:", e); 
+                    }
+                }
+                setIsProcessing(false);
+            }, 1000);
+        }
+    };
 
     // Save attendance manually via selection modal
     const handleSaveManualEntry = async (e) => {
-
         e.preventDefault();
 
         if (!selectedTeacherId) {
@@ -366,16 +367,12 @@ const StaffAttendanceScanner = () => {
         setIsSavingManual(true);
 
         try {
-
             const selectedStaff = teacherList.find(
                 t => t.teacherID === selectedTeacherId || t.id === selectedTeacherId
             );
 
-            const teacherName =
-                selectedStaff?.teacherName || "Staff Member";
-
-            const todayStr =
-                new Date().toLocaleDateString("en-CA");
+            const teacherName = selectedStaff?.teacherName || "Staff Member";
+            const todayStr = new Date().toLocaleDateString("en-CA");
 
             const qLog = query(
                 collection(db, "StaffAttendance"),
@@ -388,94 +385,55 @@ const StaffAttendanceScanner = () => {
 
             // RECORD ALREADY EXISTS
             if (!logSnap.empty) {
-
                 const existingDoc = logSnap.docs[0];
                 const existing = existingDoc.data();
 
-                // FINAL RECORD → SHOW WARNING
-                if (isAttendanceLocked(existing)) {
-
-                    setOverrideRecord({
-                        docRef: existingDoc.ref,
-                        teacherID: selectedTeacherId,
-                        teacherName,
-                        previousStatus: existing.status,
-                        previousNote: existing.note,
-                        newStatus: manualStatus
-                    });
-
-                    setOverrideAction("manual");
-
-                    setShowManualModal(false);
-                    setShowOverrideModal(true);
-
-                    return;
-                }
-
-                // Normal scan record can also be protected
                 setOverrideRecord({
                     docRef: existingDoc.ref,
                     teacherID: selectedTeacherId,
                     teacherName,
                     previousStatus: existing.status,
                     previousNote: existing.note,
+                    previousHistory: existing.overrideHistory || [],
                     newStatus: manualStatus
                 });
 
                 setOverrideAction("manual");
                 setShowManualModal(false);
                 setShowOverrideModal(true);
-
                 return;
             }
 
             // NEW MANUAL RECORD
-
             await addDoc(collection(db, "StaffAttendance"), {
-
                 teacherID: selectedTeacherId,
                 teacherName,
                 schoolId,
                 date: todayStr,
-
-                clockInTime:
-                    manualStatus === "Present" ? new Date().toLocaleTimeString() : null,
-
+                clockInTime: manualStatus === "Present" ? new Date().toLocaleTimeString() : null,
                 clockOutTime: null,
-
                 status: manualStatus,
-
                 note: manualNote.trim(),
-
                 isFinal: true,
                 finalizedBy: "manual",
                 finalizedAt: serverTimestamp(),
-
                 timestamp: serverTimestamp()
             });
 
-            toast.success(
-                `${teacherName} marked ${manualStatus}`
-            );
-
+            toast.success(`${teacherName} marked ${manualStatus}`);
             setShowManualModal(false);
             setSelectedTeacherId("");
             setManualNote("");
 
         } catch (err) {
-
             console.error(err);
             toast.error("Failed to save manual attendance.");
-
         } finally {
-
             setIsSavingManual(false);
-
         }
     };
 
     const handleConfirmOverride = async () => {
-
         if (!overrideNote.trim()) {
             toast.error("Override note is compulsory.");
             return;
@@ -484,7 +442,6 @@ const StaffAttendanceScanner = () => {
         setIsOverriding(true);
 
         try {
-
             const previousHistory = overrideRecord.previousHistory || [];
 
             const historyEntry = {
@@ -496,14 +453,11 @@ const StaffAttendanceScanner = () => {
             };
 
             await updateDoc(overrideRecord.docRef, {
-
                 status: overrideRecord.newStatus,
                 note: overrideNote.trim(),
-
                 isFinal: true,
                 finalizedBy: "manual override",
                 finalizedAt: serverTimestamp(),
-
                 overrideHistory: [
                     ...previousHistory,
                     historyEntry
@@ -521,14 +475,10 @@ const StaffAttendanceScanner = () => {
             setManualNote("");
 
         } catch (err) {
-
             console.error(err);
             toast.error("Override failed.");
-
         } finally {
-
             setIsOverriding(false);
-
         }
     };
 
@@ -541,29 +491,25 @@ const StaffAttendanceScanner = () => {
                 <div className="grid grid-cols-2 gap-2 mb-4 bg-gray-100 p-1.5 rounded-xl">
                     <button
                         onClick={() => setAttendanceType("clock-in")}
-                        className={`py-2 text-xs font-semibold rounded-lg transition ${attendanceType === "clock-in" ? "bg-green-600 text-white shadow" : "text-gray-600 hover:bg-gray-200"
-                            }`}
+                        className={`py-2 text-xs font-semibold rounded-lg transition ${attendanceType === "clock-in" ? "bg-green-600 text-white shadow" : "text-gray-600 hover:bg-gray-200"}`}
                     >
                         Clock-In
                     </button>
                     <button
                         onClick={() => setAttendanceType("clock-out")}
-                        className={`py-2 text-xs font-semibold rounded-lg transition ${attendanceType === "clock-out" ? "bg-red-600 text-white shadow" : "text-gray-600 hover:bg-gray-200"
-                            }`}
+                        className={`py-2 text-xs font-semibold rounded-lg transition ${attendanceType === "clock-out" ? "bg-red-600 text-white shadow" : "text-gray-600 hover:bg-gray-200"}`}
                     >
                         Clock-Out
                     </button>
                     <button
                         onClick={() => setAttendanceType("excuse")}
-                        className={`py-2 text-xs font-semibold rounded-lg transition ${attendanceType === "excuse" ? "bg-amber-600 text-white shadow" : "text-gray-600 hover:bg-gray-200"
-                            }`}
+                        className={`py-2 text-xs font-semibold rounded-lg transition ${attendanceType === "excuse" ? "bg-amber-600 text-white shadow" : "text-gray-600 hover:bg-gray-200"}`}
                     >
                         Mark Excuse
                     </button>
                     <button
                         onClick={() => setAttendanceType("leave")}
-                        className={`py-2 text-xs font-semibold rounded-lg transition ${attendanceType === "leave" ? "bg-blue-600 text-white shadow" : "text-gray-600 hover:bg-gray-200"
-                            }`}
+                        className={`py-2 text-xs font-semibold rounded-lg transition ${attendanceType === "leave" ? "bg-blue-600 text-white shadow" : "text-gray-600 hover:bg-gray-200"}`}
                     >
                         Mark Leave
                     </button>
@@ -649,7 +595,6 @@ const StaffAttendanceScanner = () => {
                                 </select>
                             </div>
 
-                            {/* Reason / Note Text Input */}
                             <div>
                                 <label className="block text-xs font-semibold text-gray-600 mb-1">
                                     Reason / Short Note <span className="text-red-500">*</span>
@@ -692,25 +637,20 @@ const StaffAttendanceScanner = () => {
                     </div>
                 </div>
             )}
+
+            {/* Override Confirmation Modal */}
             {showOverrideModal && overrideRecord && (
-
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl text-left">
                         <h3 className="text-lg font-bold text-red-600 mb-2">
                             ⚠ Attendance Already Completed
                         </h3>
 
                         <p className="text-sm text-gray-700 mb-4">
-
-                            <strong>{overrideRecord.teacherName}</strong> already has
-                            attendance for today.
-
+                            <strong>{overrideRecord.teacherName}</strong> already has attendance for today.
                         </p>
 
                         <div className="bg-gray-50 border rounded-xl p-3 mb-4 text-sm">
-
                             <p>
                                 Previous Status:
                                 <strong className="ml-1">
@@ -730,7 +670,6 @@ const StaffAttendanceScanner = () => {
                                     {overrideRecord.newStatus}
                                 </strong>
                             </p>
-
                         </div>
 
                         <label className="block text-xs font-semibold text-gray-600 mb-1">
@@ -746,30 +685,27 @@ const StaffAttendanceScanner = () => {
                         />
 
                         <div className="flex gap-2 mt-4">
-
                             <button
+                                type="button"
                                 onClick={() => {
                                     setShowOverrideModal(false);
                                     setOverrideNote("");
                                     setOverrideRecord(null);
                                 }}
-                                className="flex-1 py-2 border rounded-xl text-sm font-semibold"
+                                className="flex-1 py-2 text-xs font-semibold border text-gray-600 rounded-xl hover:bg-gray-50"
                             >
                                 Cancel
                             </button>
-
                             <button
+                                type="button"
                                 onClick={handleConfirmOverride}
                                 disabled={isOverriding}
-                                className="flex-1 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                                className="flex-1 py-2 text-xs font-semibold bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50"
                             >
                                 {isOverriding ? "Overriding..." : "Confirm Override"}
                             </button>
-
                         </div>
-
                     </div>
-
                 </div>
             )}
         </div>

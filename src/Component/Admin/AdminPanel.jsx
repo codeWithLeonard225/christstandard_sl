@@ -63,6 +63,7 @@ import StaffAttendanceProfileReport from "../TeacherAssignment/StaffAttendancePr
 import ClassPromotion from "../Voters/ClassPromotion";
 import TeacherIDCards from "../Staff/TeacherIDCards";
 import StaffAttendanceScanner from "../Staff/StaffAttendanceScanner";
+import StaffAttendanceScanner2 from "../Staff/StaffAttendanceScanner2";
 import StaffAttendanceRecords from "../Staff/StaffAttendanceRecords";
 import PupilIDCardScan from "../PupilsPage/PupilIDCardScan";
 import PupilAttendanceScanner from "../PupilsPage/PupilAttendanceScanner";
@@ -151,6 +152,7 @@ const NAV_ITEMS = [
     children: [
       { key: "TeacherIDCards", label: "Teacher IDCards", icon: <MdPerson /> },
       { key: "StaffAttendanceScanner", label: "Staff Attendance Scanner", icon: <MdPerson /> },
+      { key: "StaffAttendanceScanner2", label: "Staff Attendance Scanner 2", icon: <MdPerson /> },
       { key: "StaffAttendanceRecords", label: "Staff Attendance Records", icon: <MdPerson /> },
     ],
   },
@@ -319,6 +321,7 @@ function AdminPanel() {
       case "ClassPromotion": return <ClassPromotion />;
       case "TeacherIDCards": return <TeacherIDCards />;
       case "StaffAttendanceScanner": return <StaffAttendanceScanner />;
+      case "StaffAttendanceScanner2": return <StaffAttendanceScanner2 />;
       case "StaffAttendanceRecords": return <StaffAttendanceRecords />;
       case "PupilIDCardScan": return <PupilIDCardScan />;
       case "PupilAttendanceScanner": return <PupilAttendanceScanner />;
