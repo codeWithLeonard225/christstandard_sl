@@ -4,10 +4,16 @@ import { db } from "../../../firebase";
 import { collection, addDoc, query, where, getDocs, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
+import { useAuth } from "../Security/AuthContext";
 
 const StaffAttendanceScanner = () => {
-    const location = useLocation();
-    const schoolId = location.state?.schoolId || "N/A";
+   const location = useLocation();
+const { user } = useAuth();
+
+const schoolId =
+    location.state?.schoolId ||
+    user?.schoolId ||
+    "";
 
     const [attendanceType, setAttendanceType] = useState("clock-in"); // "clock-in" | "clock-out" | "excuse" | "leave"
     const [scannedResult, setScannedResult] = useState(null);

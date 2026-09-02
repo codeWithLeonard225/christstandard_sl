@@ -206,13 +206,24 @@ const PupilIDCard = () => {
                                 display: "flex",
                                 flexDirection: "column",
                                 justifyContent: "space-between",
-                                backgroundColor: "#ffffff",
+                               backgroundColor: "#FFF8D6",
                                 boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
                                 pageBreakInside: "avoid"
                             }}
                         >
                             {/* Header: School Logo, Name & Address */}
-                            <div style={{ borderBottom: "1px solid #007bff", paddingBottom: "3px", display: "flex", alignItems: "center", gap: "6px" }}>
+                            <div
+    style={{
+        borderBottom: "2px solid #38BDF8",
+        padding: "5px 4px",
+        margin: "-8px -10px 4px -10px",
+        backgroundColor: "#FFF1A8",
+        borderRadius: "7px 7px 0 0",
+        display: "flex",
+        alignItems: "center",
+        gap: "6px"
+    }}
+>
                                 {schoolLogoUrl && (
                                     <img 
                                         src={schoolLogoUrl} 
