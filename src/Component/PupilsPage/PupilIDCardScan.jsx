@@ -117,8 +117,8 @@ const PupilIDCard = () => {
                     {/* Class Filter Dropdown */}
                     <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                         <label style={{ fontSize: "14px", fontWeight: "600" }}>Class:</label>
-                        <select 
-                            value={selectedClass} 
+                        <select
+                            value={selectedClass}
                             onChange={(e) => {
                                 setSelectedClass(e.target.value);
                                 setCurrentPage(1);
@@ -134,8 +134,8 @@ const PupilIDCard = () => {
                     {/* Academic Year Filter Dropdown */}
                     <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                         <label style={{ fontSize: "14px", fontWeight: "600" }}>Year:</label>
-                        <select 
-                            value={selectedAcademicYear} 
+                        <select
+                            value={selectedAcademicYear}
                             onChange={(e) => {
                                 setSelectedAcademicYear(e.target.value);
                                 setCurrentPage(1);
@@ -148,8 +148,8 @@ const PupilIDCard = () => {
                         </select>
                     </div>
 
-                    <button 
-                        onClick={() => window.print()} 
+                    <button
+                        onClick={() => window.print()}
                         style={{ padding: "8px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", fontWeight: "600" }}
                     >
                         <FaPrint /> Print Page ({currentPage})
@@ -181,12 +181,12 @@ const PupilIDCard = () => {
             )}
 
             {/* ID Cards Grid */}
-            <div 
-                className="grid" 
-                style={{ 
-                    display: "grid", 
-                    gridTemplateColumns: `repeat(${CARDS_PER_ROW}, ${CARD_WIDTH})`, 
-                    gap: GAP_BETWEEN_CARDS, 
+            <div
+                className="grid"
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${CARDS_PER_ROW}, ${CARD_WIDTH})`,
+                    gap: GAP_BETWEEN_CARDS,
                     justifyContent: "center",
                     width: "100%",
                     maxWidth: "800px"
@@ -194,8 +194,8 @@ const PupilIDCard = () => {
             >
                 {visiblePupils.length > 0 ? (
                     visiblePupils.map((pupil) => (
-                        <div 
-                            key={pupil.id} 
+                        <div
+                            key={pupil.id}
                             style={{
                                 width: CARD_WIDTH,
                                 height: CARD_HEIGHT,
@@ -206,29 +206,29 @@ const PupilIDCard = () => {
                                 display: "flex",
                                 flexDirection: "column",
                                 justifyContent: "space-between",
-                               backgroundColor: "#FFF8D6",
+                                backgroundColor: "#FFF8D6",
                                 boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
                                 pageBreakInside: "avoid"
                             }}
                         >
                             {/* Header: School Logo, Name & Address */}
                             <div
-    style={{
-        borderBottom: "2px solid #38BDF8",
-        padding: "5px 4px",
-        margin: "-8px -10px 4px -10px",
-        backgroundColor: "#FFF1A8",
-        borderRadius: "7px 7px 0 0",
-        display: "flex",
-        alignItems: "center",
-        gap: "6px"
-    }}
->
+                                style={{
+                                    borderBottom: "2px solid #38BDF8",
+                                    padding: "5px 4px",
+                                    margin: "-8px -10px 4px -10px",
+                                    backgroundColor: "#FFF1A8",
+                                    borderRadius: "7px 7px 0 0",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px"
+                                }}
+                            >
                                 {schoolLogoUrl && (
-                                    <img 
-                                        src={schoolLogoUrl} 
-                                        alt="School Logo" 
-                                        style={{ width: "26px", height: "26px", objectFit: "contain", borderRadius: "3px" }} 
+                                    <img
+                                        src={schoolLogoUrl}
+                                        alt="School Logo"
+                                        style={{ width: "26px", height: "26px", objectFit: "contain", borderRadius: "3px" }}
                                     />
                                 )}
                                 <div style={{ flex: 1, overflow: "hidden", lineHeight: "1.1" }}>
@@ -248,9 +248,9 @@ const PupilIDCard = () => {
 
                             {/* Card Body */}
                             <div style={{ display: "flex", gap: "8px", alignItems: "center", margin: "4px 0" }}>
-                                <img 
-                                    src={pupil.userPhotoUrl || "https://via.placeholder.com/80"} 
-                                    alt={pupil.studentName} 
+                                <img
+                                    src={pupil.userPhotoUrl || "https://via.placeholder.com/80"}
+                                    alt={pupil.studentName}
                                     style={{ width: "65px", height: "65px", borderRadius: "5px", objectFit: "cover", border: "1px solid #ccc" }}
                                 />
                                 <div style={{ fontSize: "10px", lineHeight: "1.3", flex: 1, overflow: "hidden" }}>
@@ -271,8 +271,8 @@ const PupilIDCard = () => {
                                     {!schoolMotto && !schoolContact && <div>Official School Pass</div>}
                                 </div>
                                 <div style={{ background: "#fff", padding: "1px" }}>
-                                    <QRCodeSVG 
-                                        value={pupil.studentID} 
+                                    <QRCodeSVG
+                                        value={pupil.studentID}
                                         size={52}
                                         level="M"
                                         includeMargin={false}
