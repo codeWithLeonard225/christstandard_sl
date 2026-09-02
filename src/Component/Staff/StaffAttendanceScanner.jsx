@@ -70,16 +70,46 @@ const schoolId =
     };
 
     // Helper: Determine status based on current time
+    // const getClockInStatus = (now) => {
+    //     const hours = now.getHours();
+    //     if (hours >= 12) {
+    //         return { status: "Absent", allowed: false, reason: "Clock-in closed after 12:00 PM (Marked Absent)" };
+    //     }
+    //     if (hours < 8) {
+    //         return { status: "Present", allowed: true, reason: "" };
+    //     }
+    //     return { status: "Late", allowed: true, reason: "" };
+    // };
+
     const getClockInStatus = (now) => {
-        const hours = now.getHours();
-        if (hours >= 12) {
-            return { status: "Absent", allowed: false, reason: "Clock-in closed after 12:00 PM (Marked Absent)" };
-        }
-        if (hours < 8) {
-            return { status: "Present", allowed: true, reason: "" };
-        }
-        return { status: "Late", allowed: true, reason: "" };
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+
+    // Before 8:20 AM → PRESENT
+    if (hours < 8 || (hours === 8 && minutes < 20)) {
+        return {
+            status: "Present",
+            allowed: true,
+            reason: ""
+        };
+    }
+
+    // 8:20 AM to before 3:00 PM → LATE
+    if (hours < 15) {
+        return {
+            status: "Late",
+            allowed: true,
+            reason: ""
+        };
+    }
+
+    // 3:00 PM and after → ABSENT
+    return {
+        status: "Absent",
+        allowed: false,
+        reason: "Clock-in closed after 3:00 PM (Marked Absent)"
     };
+};
 
     useEffect(() => {
         const html5QrCode = new Html5Qrcode("reader-viewfinder");
@@ -108,7 +138,7 @@ const schoolId =
         return record?.isFinal === true;
     };
 
-   const handleScanSuccess = async (rawText) => {
+ const handleScanSuccess = async (rawText) => {
     if (isProcessing) return;
 
     setIsProcessing(true);
@@ -125,50 +155,43 @@ const schoolId =
         // -----------------------------------------
         // 1. READ QR CODE
         // -----------------------------------------
-        let teacherID = "";
+        let parsedData;
 
         try {
-            const parsedData = JSON.parse(rawText);
-
-            teacherID =
-                parsedData.teacherID ||
-                parsedData.id ||
-                "";
+            parsedData = JSON.parse(rawText);
         } catch {
-            // Your TeacherIDCards currently stores
-            // only teacherID in the QR code.
-            teacherID = rawText.trim();
+            parsedData = {
+                teacherID: rawText.trim()
+            };
         }
 
-        teacherID = teacherID.trim();
+        const teacherID = parsedData?.teacherID?.trim();
 
         if (!teacherID) {
             toast.error("Invalid staff QR Code.");
             return;
         }
 
-        console.log("Scanned Teacher ID:", teacherID);
-
         // -----------------------------------------
         // 2. FIND TEACHER
         // -----------------------------------------
-        const teacherQuery = query(
+        const teacherQ = query(
             collection(db, "Teachers"),
             where("teacherID", "==", teacherID),
             where("schoolId", "==", schoolId)
         );
 
-        const teacherSnap = await getDocs(teacherQuery);
+        const teacherSnap = await getDocs(teacherQ);
 
         if (teacherSnap.empty) {
             toast.error(`Teacher ID ${teacherID} not found.`);
 
             setScannedResult({
                 name: "Unknown Staff",
-                status: `Teacher ID ${teacherID} not found`,
+                status: "Teacher Not Found",
                 time: "--",
-                note: "The scanned staff ID does not belong to this school.",
-                isError: true,
+                note: `No teacher was found with ID ${teacherID}.`,
+                isError: true
             });
 
             return;
@@ -177,23 +200,18 @@ const schoolId =
         const teacherData = teacherSnap.docs[0].data();
 
         // -----------------------------------------
-        // 3. DATE & TIME
+        // 3. DATE / TIME
         // -----------------------------------------
         const now = new Date();
 
-        const todayStr = getLocalDateString(now);
+        const todayStr = now.toLocaleDateString("en-CA");
 
         const timeStr = now.toLocaleTimeString([], {
             hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
+            minute: "2-digit"
         });
 
         const currentMode = attendanceTypeRef.current;
-
-        console.log("Staff:", teacherData.teacherName);
-        console.log("Mode:", currentMode);
-        console.log("Date:", todayStr);
 
         // -----------------------------------------
         // 4. DETERMINISTIC ATTENDANCE DOCUMENT
@@ -209,23 +227,23 @@ const schoolId =
 
         const attendanceSnap = await getDoc(attendanceRef);
 
-        const existing =
-            attendanceSnap.exists()
-                ? attendanceSnap.data()
-                : null;
-
-        // =========================================
-        // CLOCK IN
-        // =========================================
+        // =====================================================
+        // CLOCK-IN
+        // =====================================================
         if (currentMode === "clock-in") {
 
-            // Already has a record
-            if (existing) {
+            // -----------------------------------------
+            // EXISTING RECORD
+            // -----------------------------------------
+            if (attendanceSnap.exists()) {
 
+                const existing = attendanceSnap.data();
+
+                // Finalized record
                 if (isAttendanceLocked(existing)) {
 
                     toast.error(
-                        `🚫 ${teacherData.teacherName} attendance is finalized as ${existing.status}.`
+                        `🚫 ${teacherData.teacherName} already has finalized attendance (${existing.status}).`
                     );
 
                     setScannedResult({
@@ -233,29 +251,31 @@ const schoolId =
                         status: `Blocked: Finalized (${existing.status})`,
                         time: existing.clockInTime || "--",
                         note: existing.note || "Attendance has been finalized.",
-                        isError: true,
+                        isError: true
                     });
 
                     return;
                 }
 
+                // Already clocked out
                 if (existing.clockOutTime) {
 
                     toast.error(
-                        `🚫 ${teacherData.teacherName} already clocked out at ${existing.clockOutTime}.`
+                        `🚫 ${teacherData.teacherName} already clocked out today at ${existing.clockOutTime}.`
                     );
 
                     setScannedResult({
                         name: teacherData.teacherName,
                         status: "Blocked: Already Clocked Out",
                         time: existing.clockOutTime,
-                        note: "Staff cannot clock in again after clocking out.",
-                        isError: true,
+                        note: "A staff member cannot clock in again after clocking out.",
+                        isError: true
                     });
 
                     return;
                 }
 
+                // Already clocked in
                 toast.warning(
                     `⚠️ ${teacherData.teacherName} is already clocked in at ${existing.clockInTime || "--"}.`
                 );
@@ -265,7 +285,7 @@ const schoolId =
                     status: `Already Clocked In (${existing.status})`,
                     time: existing.clockInTime || "--",
                     note: existing.note || null,
-                    isError: true,
+                    isError: true
                 });
 
                 return;
@@ -281,7 +301,7 @@ const schoolId =
             } = getClockInStatus(now);
 
             // -----------------------------------------
-            // AFTER CLOCK-IN CUTOFF
+            // AFTER CLOCK-IN DEADLINE
             // -----------------------------------------
             if (!allowed) {
 
@@ -299,7 +319,9 @@ const schoolId =
 
                     status: "Absent",
 
-                    note: reason,
+                    note:
+                        reason ||
+                        "No clock-in recorded before the allowed clock-in time.",
 
                     isFinal: true,
 
@@ -307,21 +329,20 @@ const schoolId =
 
                     finalizedAt: serverTimestamp(),
 
-                    timestamp: serverTimestamp(),
-
+                    timestamp: serverTimestamp()
                 });
+
+                toast.error(
+                    `❌ ${teacherData.teacherName} marked ABSENT. Clock-in is closed.`
+                );
 
                 setScannedResult({
                     name: teacherData.teacherName,
                     status: "Absent - Clock-In Closed",
                     time: "--",
                     note: reason,
-                    isError: true,
+                    isError: true
                 });
-
-                toast.error(
-                    `❌ ${teacherData.teacherName} marked ABSENT. ${reason}`
-                );
 
                 return;
             }
@@ -347,31 +368,18 @@ const schoolId =
 
                 isFinal: false,
 
-                timestamp: serverTimestamp(),
-
+                timestamp: serverTimestamp()
             });
 
             // -----------------------------------------
             // DISPLAY RESULT
             // -----------------------------------------
             setScannedResult({
-
                 name: teacherData.teacherName,
-
-                status:
-                    derivedStatus === "Late"
-                        ? "Clocked In - LATE"
-                        : "Clocked In Successfully",
-
+                status: `Clocked In (${derivedStatus})`,
                 time: timeStr,
-
-                note:
-                    derivedStatus === "Late"
-                        ? "Staff arrived after the normal clock-in time."
-                        : "Staff clocked in successfully.",
-
-                isError: false,
-
+                note: null,
+                isError: false
             });
 
             // -----------------------------------------
@@ -380,41 +388,43 @@ const schoolId =
             if (derivedStatus === "Late") {
 
                 toast.warning(
-                    `⚠️ ${teacherData.teacherName} clocked in LATE at ${timeStr}`
+                    `⚠️ ${teacherData.teacherName} Clocked IN LATE at ${timeStr}`
                 );
 
             } else {
 
                 toast.success(
-                    `✅ ${teacherData.teacherName} clocked in at ${timeStr}`
+                    `✅ ${teacherData.teacherName} Clocked IN at ${timeStr}`
                 );
             }
-
-            return;
         }
 
-        // =========================================
-        // CLOCK OUT
-        // =========================================
-        if (currentMode === "clock-out") {
+        // =====================================================
+        // CLOCK-OUT
+        // =====================================================
+        else if (currentMode === "clock-out") {
 
-            if (!existing) {
+            // No attendance record
+            if (!attendanceSnap.exists()) {
 
                 toast.error(
-                    `🚫 ${teacherData.teacherName} has no clock-in record today.`
+                    `🚫 ${teacherData.teacherName} cannot clock out without a clock-in record.`
                 );
 
                 setScannedResult({
                     name: teacherData.teacherName,
                     status: "Blocked: No Clock-In Record",
                     time: "--",
-                    note: "Staff must clock in before clocking out.",
-                    isError: true,
+                    note: "The staff member has not clocked in today.",
+                    isError: true
                 });
 
                 return;
             }
 
+            const existing = attendanceSnap.data();
+
+            // Finalized
             if (isAttendanceLocked(existing)) {
 
                 toast.error(
@@ -423,15 +433,16 @@ const schoolId =
 
                 setScannedResult({
                     name: teacherData.teacherName,
-                    status: `Blocked: Finalized (${existing.status})`,
+                    status: "Blocked: Finalized Attendance",
                     time: existing.clockOutTime || existing.clockInTime || "--",
-                    note: existing.note || "Attendance is finalized.",
-                    isError: true,
+                    note: existing.note || null,
+                    isError: true
                 });
 
                 return;
             }
 
+            // Already clocked out
             if (existing.clockOutTime) {
 
                 toast.warning(
@@ -442,49 +453,40 @@ const schoolId =
                     name: teacherData.teacherName,
                     status: "Already Clocked Out",
                     time: existing.clockOutTime,
-                    note: "Clock-out has already been completed.",
-                    isError: true,
+                    note: existing.note || null,
+                    isError: true
                 });
 
                 return;
             }
 
             // -----------------------------------------
-            // UPDATE CLOCK OUT
+            // UPDATE CLOCK-OUT
             // -----------------------------------------
             await updateDoc(attendanceRef, {
 
                 clockOutTime: timeStr,
 
-                updatedAt: serverTimestamp(),
-
+                updatedAt: serverTimestamp()
             });
 
             setScannedResult({
-
                 name: teacherData.teacherName,
-
                 status: "Clocked Out Successfully",
-
                 time: timeStr,
-
-                note: `Clocked in at ${existing.clockInTime || "--"}.`,
-
-                isError: false,
-
+                note: null,
+                isError: false
             });
 
             toast.success(
-                `🚪 ${teacherData.teacherName} clocked out at ${timeStr}`
+                `🚪 ${teacherData.teacherName} Clocked OUT at ${timeStr}`
             );
-
-            return;
         }
 
-        // =========================================
+        // =====================================================
         // EXCUSE / LEAVE
-        // =========================================
-        if (
+        // =====================================================
+        else if (
             currentMode === "excuse" ||
             currentMode === "leave"
         ) {
@@ -495,28 +497,43 @@ const schoolId =
                     : "On Leave";
 
             // Existing attendance
-            if (existing) {
+            if (attendanceSnap.exists()) {
+
+                const existing = attendanceSnap.data();
+
+                if (isAttendanceLocked(existing)) {
+
+                    toast.warning(
+                        `⚠️ ${teacherData.teacherName} already has finalized attendance.`
+                    );
+
+                    setScannedResult({
+                        name: teacherData.teacherName,
+                        status: "Blocked: Attendance Already Finalized",
+                        time:
+                            existing.clockOutTime ||
+                            existing.clockInTime ||
+                            "--",
+                        note: existing.note || null,
+                        isError: true
+                    });
+
+                    return;
+                }
 
                 toast.warning(
                     `⚠️ ${teacherData.teacherName} already has attendance for today.`
                 );
 
                 setScannedResult({
-
                     name: teacherData.teacherName,
-
-                    status: `Blocked: Already Recorded (${existing.status})`,
-
+                    status: `Already Recorded (${existing.status})`,
                     time:
                         existing.clockInTime ||
                         existing.clockOutTime ||
                         "--",
-
-                    note:
-                        "Use Manual Status Override if this attendance needs to be changed.",
-
-                    isError: true,
-
+                    note: existing.note || null,
+                    isError: true
                 });
 
                 return;
@@ -531,15 +548,13 @@ const schoolId =
 
             if (!notePrompt || !notePrompt.trim()) {
 
-                toast.error(
-                    "Reason is required."
-                );
+                toast.error("Reason note is required.");
 
                 return;
             }
 
             // -----------------------------------------
-            // CREATE RECORD
+            // CREATE EXCUSE / LEAVE RECORD
             // -----------------------------------------
             await setDoc(attendanceRef, {
 
@@ -563,75 +578,58 @@ const schoolId =
 
                 finalizedAt: serverTimestamp(),
 
-                timestamp: serverTimestamp(),
-
+                timestamp: serverTimestamp()
             });
 
+            // -----------------------------------------
+            // RESULT
+            // -----------------------------------------
             setScannedResult({
-
                 name: teacherData.teacherName,
-
                 status: targetStatus,
-
                 time: timeStr,
-
                 note: notePrompt.trim(),
-
-                isError: false,
-
+                isError: false
             });
 
             toast.success(
-                `✅ ${teacherData.teacherName} marked ${targetStatus}.`
+                `✅ ${teacherData.teacherName} marked ${targetStatus}`
             );
-
-            return;
         }
 
     } catch (err) {
 
-        console.error(
-            "Staff attendance scan processing error:",
-            err
-        );
+        console.error("Scan processing error:", err);
 
         toast.error(
-            "Error processing staff attendance."
+            "Error logging staff attendance."
         );
 
         setScannedResult({
-
-            name: "Scan Error",
-
-            status: "Attendance processing failed",
-
+            name: "System Error",
+            status: "Attendance Processing Failed",
             time: "--",
-
             note: err.message || "Unknown error occurred.",
-
-            isError: true,
-
+            isError: true
         });
 
     } finally {
 
+        // -----------------------------------------
+        // RESUME SCANNER
+        // -----------------------------------------
         setTimeout(() => {
 
             if (html5QrCodeRef.current) {
 
                 try {
-
                     html5QrCodeRef.current.resume();
-
                 } catch (e) {
-
                     console.error(
                         "Resume failed:",
                         e
                     );
-
                 }
-
             }
 
             setIsProcessing(false);
