@@ -74,82 +74,82 @@ import PupilIDCardBack from "../PupilsPage/PupilIDCardBack";
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
-  {
-    key: "forms",
-    label: "Registeration",
-    icon: <MdEdit />,
-    children: [
-      { key: "Form", label: " Pupils", icon: <MdPerson /> },
-      { key: "class", label: " Class", icon: <MdPerson /> },
-      { key: "classList", label: "Class List", icon: <MdPerson /> },
-      { key: "ClassPromotion", label: " ClassPromotion", icon: <MdPerson /> },
-      { key: "AdminForm", label: " AdminForm", icon: <MdPerson /> },
-    ],
-  },
-  {
-    key: "fees",
-    label: "Fees",
-    icon: <MdEdit />,
-    children: [
-      { key: "fees", label: " PupilsFees", icon: <MdPerson /> },
-      { key: "feesCost", label: " feesUpdate", icon: <MdPerson /> },
-      { key: "FeesResult", label: " FeesResult", icon: <MdPerson /> },
-    ],
-  },
-  {
-    key: "Staff",
-    label: "staff",
-    icon: <MdBarChart />,
-    children: [
-      { key: "TeacherRegistration", label: "Teacher Regis", icon: <MdPerson /> },
-      { key: "subjects", label: "Subjects", icon: <MdPerson /> },
-      { key: "TeacherAssignment", label: "Teacher Assignment", icon: <MdPerson /> },
-      { key: "TeacherAssignmentReport", label: "Teacher Assignment Report ", icon: <MdPerson /> },
-      { key: "PastQuestions", label: "Upload Past Questions ", icon: <MdPerson /> },
+//   {
+//     key: "forms",
+//     label: "Registeration",
+//     icon: <MdEdit />,
+//     children: [
+//       { key: "Form", label: " Pupils", icon: <MdPerson /> },
+//       { key: "class", label: " Class", icon: <MdPerson /> },
+//       { key: "classList", label: "Class List", icon: <MdPerson /> },
+//       { key: "ClassPromotion", label: " ClassPromotion", icon: <MdPerson /> },
+//       { key: "AdminForm", label: " AdminForm", icon: <MdPerson /> },
+//     ],
+//   },
+//   {
+//     key: "fees",
+//     label: "Fees",
+//     icon: <MdEdit />,
+//     children: [
+//       { key: "fees", label: " PupilsFees", icon: <MdPerson /> },
+//       { key: "feesCost", label: " feesUpdate", icon: <MdPerson /> },
+//       { key: "FeesResult", label: " FeesResult", icon: <MdPerson /> },
+//     ],
+//   },
+//   {
+//     key: "Staff",
+//     label: "staff",
+//     icon: <MdBarChart />,
+//     children: [
+//       { key: "TeacherRegistration", label: "Teacher Regis", icon: <MdPerson /> },
+//       { key: "subjects", label: "Subjects", icon: <MdPerson /> },
+//       { key: "TeacherAssignment", label: "Teacher Assignment", icon: <MdPerson /> },
+//       { key: "TeacherAssignmentReport", label: "Teacher Assignment Report ", icon: <MdPerson /> },
+//       { key: "PastQuestions", label: "Upload Past Questions ", icon: <MdPerson /> },
 
 
-    ],
-  },
-  {
-    key: "results",
-    label: "Pupils Results",
-    icon: <MdBarChart />,
-    children: [
-      // { key: "GradeSheetPage", label: "Test Grade Sheet", icon: <MdPerson /> },
-      { key: "TeacherPupilsPageAdmin", label: "TeacherPupilsGrade", icon: <MdPerson /> },
-      { key: "SubGradeMatrixPage", label: "Sub Grade Sheet", icon: <MdPerson /> },
-      { key: "ClassFullTermMatrixPage", label: "Term Grade Sheet", icon: <MdPerson /> },
-      { key: "ReportCardTermly", label: "ReportCard Termly", icon: <MdPerson /> },
-      { key: "GeneralReportCard", label: "ReportCard Yearly", icon: <MdPerson /> },
-      { key: "TermResult", label: "TermResult GradeSheet", icon: <MdPerson /> },
-      { key: "YearlyResult", label: "Yearly GradeSheet", icon: <MdPerson /> },
-      { key: "YearlyGeneralReportCard", label: "YearlyGeneralReportCard", icon: <MdPerson /> },
-      // { key: "Testing", label: "Testing", icon: <MdPerson /> },
+//     ],
+//   },
+//   {
+//     key: "results",
+//     label: "Pupils Results",
+//     icon: <MdBarChart />,
+//     children: [
+//       // { key: "GradeSheetPage", label: "Test Grade Sheet", icon: <MdPerson /> },
+//       { key: "TeacherPupilsPageAdmin", label: "TeacherPupilsGrade", icon: <MdPerson /> },
+//       { key: "SubGradeMatrixPage", label: "Sub Grade Sheet", icon: <MdPerson /> },
+//       { key: "ClassFullTermMatrixPage", label: "Term Grade Sheet", icon: <MdPerson /> },
+//       { key: "ReportCardTermly", label: "ReportCard Termly", icon: <MdPerson /> },
+//       { key: "GeneralReportCard", label: "ReportCard Yearly", icon: <MdPerson /> },
+//       { key: "TermResult", label: "TermResult GradeSheet", icon: <MdPerson /> },
+//       { key: "YearlyResult", label: "Yearly GradeSheet", icon: <MdPerson /> },
+//       { key: "YearlyGeneralReportCard", label: "YearlyGeneralReportCard", icon: <MdPerson /> },
+//       // { key: "Testing", label: "Testing", icon: <MdPerson /> },
 
-    ],
-  },
-  {
-    key: "NationalResults",
-    label: "National Results",
-    icon: <MdBarChart />,
-    children: [
-      { key: "beceResult", label: "Bece Result Entering", icon: <MdPerson /> },
-      { key: "beceReport", label: "Bece Result Report", icon: <MdPerson /> },
+//     ],
+//   },
+//   {
+//     key: "NationalResults",
+//     label: "National Results",
+//     icon: <MdBarChart />,
+//     children: [
+//       { key: "beceResult", label: "Bece Result Entering", icon: <MdPerson /> },
+//       { key: "beceReport", label: "Bece Result Report", icon: <MdPerson /> },
 
 
-    ],
-  },
-  {
-    key: "qrcode-Pupil",
-    label: "Qr code Attendance-Pupil",
-    icon: <MdBarChart />,
-    children: [
-      // { key: "PupilIDCardScan", label: "Pupil Card Scan", icon: <MdPerson /> },
-      { key: "PupilIDCardBack", label: "Pupil Card Back", icon: <MdPerson /> },
-      { key: "PupilAttendanceScanner", label: "Attendance Scanner", icon: <MdPerson /> },
-      { key: "PupilAttendanceLogs", label: "Pupil Attendance Logs", icon: <MdPerson /> },
-    ],
-  },
+//     ],
+//   },
+//   {
+//     key: "qrcode-Pupil",
+//     label: "Qr code Attendance-Pupil",
+//     icon: <MdBarChart />,
+//     children: [
+//       // { key: "PupilIDCardScan", label: "Pupil Card Scan", icon: <MdPerson /> },
+//       { key: "PupilIDCardBack", label: "Pupil Card Back", icon: <MdPerson /> },
+//       { key: "PupilAttendanceScanner", label: "Attendance Scanner", icon: <MdPerson /> },
+//       { key: "PupilAttendanceLogs", label: "Pupil Attendance Logs", icon: <MdPerson /> },
+//     ],
+//   },
   {
     key: "qrcode-Staff",
     label: "Qr code Attendance-Staff",
@@ -158,7 +158,7 @@ const NAV_ITEMS = [
       // { key: "TeacherIDCards", label: "Teacher IDCards", icon: <MdPerson /> },
       // { key: "TeacherIDCardsBack", label: "Teacher Back IDCards", icon: <MdPerson /> },
       { key: "StaffAttendanceScanner", label: "Staff Attendance Scanner", icon: <MdPerson /> },
-      { key: "StaffPayroll", label: "Staff Payroll", icon: <MdPerson /> },
+    //   { key: "StaffPayroll", label: "Staff Payroll", icon: <MdPerson /> },
       { key: "StaffAttendanceRecords", label: "Staff Attendance Records", icon: <MdPerson /> },
     ],
   },
@@ -186,19 +186,19 @@ const NAV_ITEMS = [
   //   icon: <MdWarning />, // 📖
   // },
 
-  {
-    key: "timetable",
-    label: "TimeTable",
-    icon: <MdBarChart />,
-    children: [
-      { key: "TimetableEntry", label: "TimetableEntry", icon: <MdPerson /> },
-      { key: "WeeklyTimetableReport", label: "WeeklyTimetableReport", icon: <MdPerson /> },
-      { key: "TimeTableTeacherAtt", label: "TimeTableTeacherAtt", icon: <MdPerson /> },
-      { key: "TimeTableDailyAttendanceReport", label: "DailyAttendanceReport", icon: <MdPerson /> },
-      { key: "TimeTableTeacherReport", label: "MonthlyTimeTableReport", icon: <MdPerson /> },
+//   {
+//     key: "timetable",
+//     label: "TimeTable",
+//     icon: <MdBarChart />,
+//     children: [
+//       { key: "TimetableEntry", label: "TimetableEntry", icon: <MdPerson /> },
+//       { key: "WeeklyTimetableReport", label: "WeeklyTimetableReport", icon: <MdPerson /> },
+//       { key: "TimeTableTeacherAtt", label: "TimeTableTeacherAtt", icon: <MdPerson /> },
+//       { key: "TimeTableDailyAttendanceReport", label: "DailyAttendanceReport", icon: <MdPerson /> },
+//       { key: "TimeTableTeacherReport", label: "MonthlyTimeTableReport", icon: <MdPerson /> },
 
-    ],
-  },
+//     ],
+//   },
   {
     key: "BankFeesPage",
     label: "Bank Report",

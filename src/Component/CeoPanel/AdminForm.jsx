@@ -21,7 +21,9 @@ const ACCESS_TYPES = [
     "Private",
     "PrivateSpecial",
     "Fees",
-    "Special"
+    "Special",
+    "PupilAttendanceial",
+    "staffAttendanceial"
 ];
 
 const AdminForm = () => {
@@ -371,6 +373,8 @@ const AdminForm = () => {
                             <option value="Private">Private</option>
                             <option value="Fees">Fees Admin</option>
                             <option value="Special">Special/Super Admin</option>
+                            <option value="PupilAttendanceial">PupilAttendanceial</option>
+                            <option value="StaffAttendanceial">StaffAttendanceial</option>
                         </select>
                     </div>
                       {/* ✅ UPDATED: Role is now a text input */}

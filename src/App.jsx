@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import AdminPanel from "./Component/Admin/AdminPanel";
+import PupilAttendanceial from "./Component/Admin/PupilAttendanceial";
+import StaffAttendanceial from "./Component/Admin/StaffAttendanceial";
 import LoginPage from "./Component/Admin/LoginPage";
 import FeesDashboard from "./Component/Dashboard/FeesDsahboard";
 import { AuthProvider } from "./Component/Security/AuthContext";
@@ -44,6 +46,22 @@ function App() {
             element={
               <ProtectedRoute role="admin">
                 <AdminPanel />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/PupilAttendanceial"
+            element={
+              <ProtectedRoute role="admin">
+                <PupilAttendanceial />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/StaffAttendanceial"
+            element={
+              <ProtectedRoute role="admin">
+                <StaffAttendanceial />
               </ProtectedRoute>
             }
           />

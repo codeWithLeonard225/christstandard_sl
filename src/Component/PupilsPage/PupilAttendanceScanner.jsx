@@ -19,6 +19,50 @@ const AttendanceScanner = () => {
     const { user } = useAuth();
     const currentSchoolId = user?.schoolId || null;
 
+    // Get the currently logged-in admin/teacher from localStorage
+    const getLoggedInUser = () => {
+        try {
+            const savedUser = JSON.parse(localStorage.getItem("schoolUser"));
+
+            if (!savedUser) {
+                return {
+                    id: "",
+                    name: "Unknown User",
+                    role: "Unknown",
+                };
+            }
+
+            const userData = savedUser.data || {};
+
+            return {
+                id:
+                    userData.adminID ||
+                    userData.teacherID ||
+                    userData.ceoID ||
+                    userData.classId ||
+                    savedUser.userID ||
+                    "",
+
+                name:
+                    userData.adminName ||
+                    userData.teacherName ||
+                    userData.ceoName ||
+                    userData.className ||
+                    "Unknown User",
+
+                role: savedUser.role || "Unknown",
+            };
+        } catch (error) {
+            console.error("Failed to read logged-in user:", error);
+
+            return {
+                id: "",
+                name: "Unknown User",
+                role: "Unknown",
+            };
+        }
+    };
+
     // Navigation Tabs: 'scanner' or 'manual'
     const [activeTab, setActiveTab] = useState("scanner");
 
@@ -30,10 +74,13 @@ const AttendanceScanner = () => {
     // Pupils / Student List State for Manual Dropdown
     const [pupilsList, setPupilsList] = useState([]);
     const [loadingPupils, setLoadingPupils] = useState(false);
+    const [selectedAcademicYear, setSelectedAcademicYear] = useState("");
+const [selectedClass, setSelectedClass] = useState("");
 
     // Manual Override Form States
     const [manualStudentID, setManualStudentID] = useState("");
     const [selectedPupilName, setSelectedPupilName] = useState("");
+   
     const [manualStatus, setManualStatus] = useState("Excuse");
     const [manualNote, setManualNote] = useState("");
     const [manualSubmitting, setManualSubmitting] = useState(false);
@@ -138,8 +185,44 @@ const AttendanceScanner = () => {
             }
         };
     }, [activeTab]);
+    
 
-    // Automatically mark pupils as Absent at 3:00 PM
+    const academicYears = [
+    ...new Set(
+        pupilsList
+            .map((p) => p.academicYear)
+            .filter(Boolean)
+    ),
+].sort();
+
+const classes = [
+    ...new Set(
+        pupilsList
+            .filter(
+                (p) =>
+                    !selectedAcademicYear ||
+                    p.academicYear === selectedAcademicYear
+            )
+            .map((p) => p.class)
+            .filter(Boolean)
+    ),
+].sort();
+
+const filteredPupils = pupilsList
+    .filter(
+        (p) =>
+            (!selectedAcademicYear ||
+                p.academicYear === selectedAcademicYear) &&
+            (!selectedClass ||
+                p.class === selectedClass)
+    )
+    .sort((a, b) =>
+        (a.studentName || "").localeCompare(
+            b.studentName || ""
+        )
+    );
+    
+
     // useEffect(() => {
     //     if (!currentSchoolId || pupilsList.length === 0) return;
 
@@ -231,34 +314,67 @@ const AttendanceScanner = () => {
 
     // Helper: Compute status based on arrival time
     // Pupil attendance time rules
+    // ==========================================
+    // PUPIL CLOCK-IN TIME RULES
+    // ==========================================
     const calculateClockInStatus = (nowDate) => {
         const hours = nowDate.getHours();
         const minutes = nowDate.getMinutes();
+
         const totalMinutes = hours * 60 + minutes;
 
-        const PRESENT_CUTOFF = 8 * 60 + 30; // 8:30 AM
-        const SCHOOL_END_TIME = 15 * 60;    // 3:00 PM
+        // Attendance time limits
+        const ATTENDANCE_START = 6 * 60 + 30;   // 6:30 AM
+        const PRESENT_END = 9 * 60 + 30;        // 9:30 AM
+        const LATE_END = 10 * 60 + 30;           // 10:30 AM
+        const ABSENT_END = 12 * 60 + 55;         // 12:55 PM
 
-        // Before 8:30 AM = Present
-        if (totalMinutes < PRESENT_CUTOFF) {
+        // Before 6:30 AM
+        if (totalMinutes < ATTENDANCE_START) {
+            return {
+                status: "Not Started",
+                allowed: false,
+                recordAttendance: false,
+                message: "Pupil attendance clock-in starts at 6:30 AM.",
+            };
+        }
+
+        // 6:30 AM - 9:30 AM
+        if (totalMinutes <= PRESENT_END) {
             return {
                 status: "Present",
                 allowed: true,
+                recordAttendance: true,
+                message: "Pupil is Present.",
             };
         }
 
-        // From 8:30 AM until before 3:00 PM = Late
-        if (totalMinutes < SCHOOL_END_TIME) {
+        // 9:31 AM - 10:30 AM
+        if (totalMinutes <= LATE_END) {
             return {
                 status: "Late",
                 allowed: true,
+                recordAttendance: true,
+                message: "Pupil is Late.",
             };
         }
 
-        // 3:00 PM or later = Absent
+        // 10:31 AM - 12:55 PM
+        if (totalMinutes <= ABSENT_END) {
+            return {
+                status: "Absent",
+                allowed: true,
+                recordAttendance: true,
+                message: "Pupil is marked Absent because the late clock-in period has ended.",
+            };
+        }
+
+        // After 12:55 PM
         return {
-            status: "Absent",
+            status: "Closed",
             allowed: false,
+            recordAttendance: false,
+            message: "Pupil attendance clock-in closed at 12:55 PM.",
         };
     };
 
@@ -266,14 +382,25 @@ const AttendanceScanner = () => {
     const handleAttendanceLogging = async (studentID, mode) => {
         const now = new Date();
         const todayStr = getLocalDateString(now);
-        const nowTime = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const nowTime = now.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+        });
 
-        // 1. Fetch Pupil Details
+        // ==========================================
+        // GET CURRENT LOGGED-IN USER
+        // ==========================================
+        const loggedInUser = getLoggedInUser();
+
+        // ==========================================
+        // 1. FETCH PUPIL DETAILS
+        // ==========================================
         const pupilQ = query(
             collection(db, "PupilsReg"),
             where("studentID", "==", studentID),
             where("schoolId", "==", currentSchoolId)
         );
+
         const pupilSnap = await getDocs(pupilQ);
 
         if (pupilSnap.empty) {
@@ -283,17 +410,28 @@ const AttendanceScanner = () => {
 
         const pupilData = pupilSnap.docs[0].data();
 
-        // 2. Reference Deterministic Document ID: SCHOOLID_STUDENTID_YYYY-MM-DD
+        // ==========================================
+        // 2. ATTENDANCE DOCUMENT
+        // ==========================================
         const attendanceId = `${currentSchoolId}_${studentID}_${todayStr}`;
         const attendanceRef = doc(db, "AttendanceLogs", attendanceId);
+
         const attSnap = await getDoc(attendanceRef);
 
+        // ==========================================
         // CLOCK IN
+        // ==========================================
         if (mode === "clockIn") {
+
+            // ------------------------------------------
+            // ALREADY HAS ATTENDANCE RECORD
+            // ------------------------------------------
             if (attSnap.exists()) {
                 const existingLog = attSnap.data();
 
-                toast.warning(`⚠️ Action Blocked: ${pupilData.studentName} is locked as '${existingLog.status}'.`);
+                toast.warning(
+                    `⚠️ Action Blocked: ${pupilData.studentName} is already recorded as '${existingLog.status}'.`
+                );
 
                 setScanResult({
                     name: pupilData.studentName,
@@ -302,90 +440,156 @@ const AttendanceScanner = () => {
                     clockOutTime: existingLog.clockOutTime || "--",
                     status: existingLog.status,
                     studentID: pupilData.studentID,
-                    userPhotoUrl: pupilData.userPhotoUrl,
+                    userPhotoUrl: pupilData.userPhotoUrl || "",
+
+                    loggedByName:
+                        existingLog.loggedByName ||
+                        loggedInUser.name,
+
+                    loggedByRole:
+                        existingLog.loggedByRole ||
+                        loggedInUser.role,
+
                     isError: true,
                 });
+
                 return;
             }
 
-            // Calculate status based on cutoff time
-            const { status: derivedStatus, allowed } = calculateClockInStatus(now);
+            // ------------------------------------------
+            // CALCULATE STATUS USING CURRENT TIME
+            // ------------------------------------------
+            const {
+                status: derivedStatus,
+                allowed,
+                message,
+            } = calculateClockInStatus(now);
 
+            // ------------------------------------------
+            // BEFORE 6:30 AM
+            // ------------------------------------------
             if (!allowed) {
-                // At 3:00 PM or later, pupil cannot clock in
-                // and is immediately recorded as Absent.
-
-                await setDoc(attendanceRef, {
-                    studentID: pupilData.studentID,
-                    studentName: pupilData.studentName,
-                    class: pupilData.class || "",
-                    academicYear: pupilData.academicYear || "",
-                    userPhotoUrl: pupilData.userPhotoUrl || "",
-                    schoolId: currentSchoolId,
-                    date: todayStr,
-                    clockInTime: null,
-                    clockOutTime: null,
-                    status: "Absent",
-                    note: "No clock-in recorded before 3:00 PM school closing time",
-                    loggedBy: "Automatic Attendance System",
-                    createdAt: serverTimestamp(),
-                });
 
                 setScanResult({
                     name: pupilData.studentName,
-                    action: "Clock In Blocked (School Closed)",
+                    action: "Clock In Blocked",
                     time: "--",
                     clockOutTime: "--",
-                    status: "Absent",
+                    status: derivedStatus,
                     studentID: pupilData.studentID,
-                    userPhotoUrl: pupilData.userPhotoUrl,
+                    userPhotoUrl: pupilData.userPhotoUrl || "",
+
+                    loggedByName: loggedInUser.name,
+                    loggedByRole: loggedInUser.role,
+
                     isError: true,
                 });
 
-                toast.error(
-                    `❌ ${pupilData.studentName} marked ABSENT. School clock-in closed at 3:00 PM.`
-                );
+                toast.error(`❌ ${message}`);
 
                 return;
             }
 
-            // Successful Clock In
+            // ------------------------------------------
+            // PRESENT / LATE / ABSENT
+            // ALL RECORD THE CURRENT TIME
+            // ------------------------------------------
             await setDoc(attendanceRef, {
                 studentID: pupilData.studentID,
                 studentName: pupilData.studentName,
+
                 class: pupilData.class || "",
                 academicYear: pupilData.academicYear || "",
                 userPhotoUrl: pupilData.userPhotoUrl || "",
+
                 schoolId: currentSchoolId,
                 date: todayStr,
+
+                // IMPORTANT:
+                // Present, Late AND Absent all get
+                // the actual attendance time.
                 clockInTime: nowTime,
+
                 clockOutTime: null,
+
                 status: derivedStatus,
+
+                note:
+                    derivedStatus === "Absent"
+                        ? `Attendance recorded at ${nowTime}. Pupil arrived after the late attendance period.`
+                        : `QR attendance recorded at ${nowTime}.`,
+
+                loggedById: loggedInUser.id,
+                loggedByName: loggedInUser.name,
+                loggedByRole: loggedInUser.role,
+
                 createdAt: serverTimestamp(),
             });
 
+            // ------------------------------------------
+            // DISPLAY RESULT
+            // ------------------------------------------
             setScanResult({
                 name: pupilData.studentName,
-                action: `Clocked IN (${derivedStatus})`,
+
+                action:
+                    derivedStatus === "Absent"
+                        ? `Marked ABSENT at ${nowTime}`
+                        : `Clocked IN (${derivedStatus})`,
+
                 time: nowTime,
+
                 clockOutTime: "--",
+
                 status: derivedStatus,
+
                 studentID: pupilData.studentID,
-                userPhotoUrl: pupilData.userPhotoUrl,
-                isError: false,
+
+                userPhotoUrl:
+                    pupilData.userPhotoUrl || "",
+
+                loggedByName: loggedInUser.name,
+                loggedByRole: loggedInUser.role,
+
+                isError: derivedStatus === "Absent",
             });
 
-            if (derivedStatus === "Late") {
-                toast.warn(`⚠️ Clocked IN LATE: ${pupilData.studentName} at ${nowTime}`);
-            } else {
-                toast.success(`✅ Clocked IN: ${pupilData.studentName} at ${nowTime}`);
+            // ------------------------------------------
+            // SUCCESS / WARNING MESSAGE
+            // ------------------------------------------
+            if (derivedStatus === "Present") {
+
+                toast.success(
+                    `✅ PRESENT: ${pupilData.studentName} at ${nowTime}`
+                );
+
+            } else if (derivedStatus === "Late") {
+
+                toast.warn(
+                    `⚠️ LATE: ${pupilData.studentName} at ${nowTime}`
+                );
+
+            } else if (derivedStatus === "Absent") {
+
+                toast.error(
+                    `❌ ABSENT: ${pupilData.studentName} at ${nowTime}`
+                );
             }
         }
 
+        // ==========================================
         // CLOCK OUT
+        // ==========================================
         else if (mode === "clockOut") {
+
+            // ------------------------------------------
+            // NO CLOCK-IN RECORD
+            // ------------------------------------------
             if (!attSnap.exists()) {
-                toast.error(`⚠️ ${pupilData.studentName} has no clock-in record for today.`);
+                toast.error(
+                    `⚠️ ${pupilData.studentName} has no clock-in record for today.`
+                );
+
                 setScanResult({
                     name: pupilData.studentName,
                     action: "Clock Out Blocked (No Clock In)",
@@ -393,17 +597,31 @@ const AttendanceScanner = () => {
                     clockOutTime: "--",
                     status: "N/A",
                     studentID: pupilData.studentID,
-                    userPhotoUrl: pupilData.userPhotoUrl,
+                    userPhotoUrl: pupilData.userPhotoUrl || "",
+
+                    loggedByName: loggedInUser.name,
+                    loggedByRole: loggedInUser.role,
+
                     isError: true,
                 });
+
                 return;
             }
 
             const existingLogData = attSnap.data();
 
-            // Check if status allows Clock Out (Only Present or Late can clock out)
-            if (["Excuse", "Leave", "Absent"].includes(existingLogData.status)) {
-                toast.error(`❌ Clock Out Blocked: Record locked as '${existingLogData.status}'.`);
+            // ------------------------------------------
+            // CHECK STATUS
+            // ------------------------------------------
+            if (
+                ["Excuse", "Leave", "Absent"].includes(
+                    existingLogData.status
+                )
+            ) {
+                toast.error(
+                    `❌ Clock Out Blocked: Record locked as '${existingLogData.status}'.`
+                );
+
                 setScanResult({
                     name: pupilData.studentName,
                     action: `Clock Out Blocked (${existingLogData.status})`,
@@ -411,14 +629,25 @@ const AttendanceScanner = () => {
                     clockOutTime: "--",
                     status: existingLogData.status,
                     studentID: pupilData.studentID,
-                    userPhotoUrl: pupilData.userPhotoUrl,
+                    userPhotoUrl: pupilData.userPhotoUrl || "",
+
+                    loggedByName: loggedInUser.name,
+                    loggedByRole: loggedInUser.role,
+
                     isError: true,
                 });
+
                 return;
             }
 
+            // ------------------------------------------
+            // ALREADY CLOCKED OUT
+            // ------------------------------------------
             if (existingLogData.clockOutTime) {
-                toast.info(`${pupilData.studentName} already clocked out at ${existingLogData.clockOutTime}.`);
+                toast.info(
+                    `${pupilData.studentName} already clocked out at ${existingLogData.clockOutTime}.`
+                );
+
                 setScanResult({
                     name: pupilData.studentName,
                     action: "Already Clocked Out",
@@ -426,16 +655,28 @@ const AttendanceScanner = () => {
                     clockOutTime: existingLogData.clockOutTime,
                     status: existingLogData.status,
                     studentID: pupilData.studentID,
-                    userPhotoUrl: pupilData.userPhotoUrl,
+                    userPhotoUrl: pupilData.userPhotoUrl || "",
+
+                    loggedByName: existingLogData.loggedByName || loggedInUser.name,
+                    loggedByRole: existingLogData.loggedByRole || loggedInUser.role,
+
                     isError: true,
                 });
+
                 return;
             }
 
-            // Update record with Clock Out time
+            // ------------------------------------------
+            // UPDATE CLOCK-OUT TIME
+            // ------------------------------------------
             await updateDoc(attendanceRef, {
                 clockOutTime: nowTime,
                 updatedAt: serverTimestamp(),
+
+                // Person who performed clock-out
+                clockOutById: loggedInUser.id,
+                clockOutByName: loggedInUser.name,
+                clockOutByRole: loggedInUser.role,
             });
 
             setScanResult({
@@ -445,10 +686,17 @@ const AttendanceScanner = () => {
                 clockOutTime: nowTime,
                 status: existingLogData.status || "Present",
                 studentID: pupilData.studentID,
-                userPhotoUrl: pupilData.userPhotoUrl,
+                userPhotoUrl: pupilData.userPhotoUrl || "",
+
+                loggedByName: existingLogData.loggedByName || loggedInUser.name,
+                loggedByRole: existingLogData.loggedByRole || loggedInUser.role,
+
                 isError: false,
             });
-            toast.info(`🚪 Clocked OUT: ${pupilData.studentName} at ${nowTime}`);
+
+            toast.info(
+                `🚪 Clocked OUT: ${pupilData.studentName} at ${nowTime}`
+            );
         }
     };
 
@@ -466,77 +714,529 @@ const AttendanceScanner = () => {
     };
 
     // Manual Status Override Submission
-    const handleManualStatusSubmit = async (e) => {
-        e.preventDefault();
+   const handleManualStatusSubmit = async (e) => {
+    e.preventDefault();
 
-        if (!manualStudentID.trim()) {
-            alert("Please select a pupil from the list.");
+    const loggedInUser = getLoggedInUser();
+
+    if (!manualStudentID.trim()) {
+        alert("Please select a pupil from the list.");
+        return;
+    }
+
+    if (!currentSchoolId) {
+        toast.error("School information is missing.");
+        return;
+    }
+
+    setManualSubmitting(true);
+
+    try {
+        const now = new Date();
+
+        const todayStr = getLocalDateString(now);
+
+        const nowTime = now.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+
+        // ==========================================
+        // 1. FETCH PUPIL
+        // ==========================================
+
+        const pupilQ = query(
+            collection(db, "PupilsReg"),
+            where(
+                "studentID",
+                "==",
+                manualStudentID.trim()
+            ),
+            where(
+                "schoolId",
+                "==",
+                currentSchoolId
+            )
+        );
+
+        const pupilSnap = await getDocs(pupilQ);
+
+        if (pupilSnap.empty) {
+            toast.error(
+                `Pupil ID ${manualStudentID} not found.`
+            );
             return;
         }
 
-        setManualSubmitting(true);
+        const pupilData = pupilSnap.docs[0].data();
 
-        try {
-            const todayStr = getLocalDateString();
+        // ==========================================
+        // 2. ATTENDANCE DOCUMENT
+        // ==========================================
 
-            // 1. Fetch Pupil Details
-            const pupilQ = query(
-                collection(db, "PupilsReg"),
-                where("studentID", "==", manualStudentID.trim()),
-                where("schoolId", "==", currentSchoolId)
-            );
-            const pupilSnap = await getDocs(pupilQ);
+        const attendanceId =
+            `${currentSchoolId}_${manualStudentID.trim()}_${todayStr}`;
 
-            if (pupilSnap.empty) {
-                alert(`Pupil ID ${manualStudentID} not found.`);
+        const attendanceRef = doc(
+            db,
+            "AttendanceLogs",
+            attendanceId
+        );
+
+        // IMPORTANT:
+        // Get today's attendance record BEFORE
+        // checking Clock-in or Clock-out.
+        const attSnap = await getDoc(attendanceRef);
+
+        // ==========================================
+        // 3. MANUAL CLOCK-OUT
+        // ==========================================
+
+        if (manualStatus === "Clockout") {
+
+            // ------------------------------------------
+            // NO ATTENDANCE RECORD
+            // ------------------------------------------
+
+            if (!attSnap.exists()) {
+
+                toast.error(
+                    `⚠️ ${pupilData.studentName} has no clock-in record for today.`
+                );
+
                 return;
             }
 
-            const pupilData = pupilSnap.docs[0].data();
+            const existingLog = attSnap.data();
 
-            // 2. Reference Deterministic Document ID
-            const attendanceId = `${currentSchoolId}_${manualStudentID.trim()}_${todayStr}`;
-            const attendanceRef = doc(db, "AttendanceLogs", attendanceId);
-            const attSnap = await getDoc(attendanceRef);
+            // ------------------------------------------
+            // BLOCK EXCUSE / LEAVE / ABSENT
+            // ------------------------------------------
 
-            if (attSnap.exists()) {
-                const existing = attSnap.data();
-                toast.error(`❌ Action Blocked: An attendance record (${existing.status}) already exists for ${pupilData.studentName} today.`);
-                setManualStudentID("");
-                setSelectedPupilName("");
-                setManualNote("");
+            if (
+                ["Excuse", "Leave", "Absent"].includes(
+                    existingLog.status
+                )
+            ) {
+
+                toast.error(
+                    `❌ Clock Out Blocked: Record is '${existingLog.status}'.`
+                );
+
                 return;
             }
 
-            // 3. Create Override Record with setDoc using deterministic key
-            await setDoc(attendanceRef, {
-                studentID: pupilData.studentID,
-                studentName: pupilData.studentName,
-                class: pupilData.class || "",
-                academicYear: pupilData.academicYear || "",
-                userPhotoUrl: pupilData.userPhotoUrl || "",
-                schoolId: currentSchoolId,
-                date: todayStr,
-                clockInTime: null,
-                clockOutTime: null,
-                status: manualStatus,
-                note: manualNote.trim() || `Manually recorded as ${manualStatus}`,
-                loggedBy: "Admin Manual Override",
-                createdAt: serverTimestamp(),
+            // ------------------------------------------
+            // CHECK CLOCK-IN
+            // ------------------------------------------
+
+            if (!existingLog.clockInTime) {
+
+                toast.error(
+                    `⚠️ ${pupilData.studentName} has no clock-in time recorded.`
+                );
+
+                return;
+            }
+
+            // ------------------------------------------
+            // ALREADY CLOCKED OUT
+            // ------------------------------------------
+
+            if (existingLog.clockOutTime) {
+
+                toast.info(
+                    `${pupilData.studentName} already clocked out at ${existingLog.clockOutTime}.`
+                );
+
+                return;
+            }
+
+            // ------------------------------------------
+            // SAVE CLOCK-OUT
+            // ------------------------------------------
+
+            await updateDoc(attendanceRef, {
+
+                clockOutTime: nowTime,
+
+                updatedAt: serverTimestamp(),
+
+                clockOutById:
+                    loggedInUser.id,
+
+                clockOutByName:
+                    loggedInUser.name,
+
+                clockOutByRole:
+                    loggedInUser.role,
             });
 
-            toast.success(`✅ Recorded: ${pupilData.studentName} as ${manualStatus.toUpperCase()}`);
+            // ------------------------------------------
+            // SUCCESS
+            // ------------------------------------------
+
+            toast.success(
+                `🚪 ${pupilData.studentName} manually clocked OUT at ${nowTime}.`
+            );
+
+            // ------------------------------------------
+            // RESET
+            // ------------------------------------------
 
             setManualStudentID("");
             setSelectedPupilName("");
             setManualNote("");
-        } catch (error) {
-            console.error("Error submitting manual status:", error);
-            toast.error("Failed to log manual status.");
-        } finally {
-            setManualSubmitting(false);
+
+            return;
         }
-    };
+
+        // ==========================================
+        // 4. MANUAL CLOCK-IN
+        // ==========================================
+
+        if (manualStatus === "Clockin") {
+
+            // ------------------------------------------
+            // PREVENT DUPLICATE
+            // ------------------------------------------
+
+            if (attSnap.exists()) {
+
+                const existing =
+                    attSnap.data();
+
+                toast.error(
+                    `❌ Action Blocked: ${pupilData.studentName} already has a ${existing.status} attendance record today.`
+                );
+
+                return;
+            }
+
+            // ------------------------------------------
+            // CHECK TIME RULE
+            // ------------------------------------------
+
+            const {
+                status: derivedStatus,
+                allowed,
+                message,
+            } = calculateClockInStatus(now);
+
+            if (!allowed) {
+
+                toast.error(
+                    `❌ ${message}`
+                );
+
+                return;
+            }
+
+            // ------------------------------------------
+            // SAVE MANUAL CLOCK-IN
+            // ------------------------------------------
+
+            await setDoc(attendanceRef, {
+
+                studentID:
+                    pupilData.studentID,
+
+                studentName:
+                    pupilData.studentName,
+
+                class:
+                    pupilData.class || "",
+
+                academicYear:
+                    pupilData.academicYear || "",
+
+                userPhotoUrl:
+                    pupilData.userPhotoUrl || "",
+
+                schoolId:
+                    currentSchoolId,
+
+                date:
+                    todayStr,
+
+                clockInTime:
+                    nowTime,
+
+                clockOutTime:
+                    null,
+
+                status:
+                    derivedStatus,
+
+                note:
+                    manualNote.trim() ||
+                    `Manual clock-in recorded at ${nowTime} as ${derivedStatus}. No ID card.`,
+
+                loggedById:
+                    loggedInUser.id,
+
+                loggedByName:
+                    loggedInUser.name,
+
+                loggedByRole:
+                    loggedInUser.role,
+
+                createdAt:
+                    serverTimestamp(),
+            });
+
+            // ------------------------------------------
+            // MESSAGE
+            // ------------------------------------------
+
+            if (derivedStatus === "Present") {
+
+                toast.success(
+                    `✅ ${pupilData.studentName} clocked IN at ${nowTime}.`
+                );
+
+            } else if (derivedStatus === "Late") {
+
+                toast.warn(
+                    `⚠️ ${pupilData.studentName} clocked IN late at ${nowTime}.`
+                );
+
+            } else if (derivedStatus === "Absent") {
+
+                toast.error(
+                    `❌ ${pupilData.studentName} recorded as ABSENT at ${nowTime}.`
+                );
+            }
+
+            // ------------------------------------------
+            // RESET
+            // ------------------------------------------
+
+            setManualStudentID("");
+            setSelectedPupilName("");
+            setManualNote("");
+
+            return;
+        }
+
+        // ==========================================
+        // 5. EXCUSE / LEAVE
+        // ==========================================
+
+        if (
+            manualStatus === "Excuse" ||
+            manualStatus === "Leave"
+        ) {
+
+            // ------------------------------------------
+            // PREVENT DUPLICATE
+            // ------------------------------------------
+
+            if (attSnap.exists()) {
+
+                const existing =
+                    attSnap.data();
+
+                toast.error(
+                    `❌ Action Blocked: ${pupilData.studentName} already has a ${existing.status} attendance record today.`
+                );
+
+                return;
+            }
+
+            // ------------------------------------------
+            // SAVE EXCUSE / LEAVE
+            // ------------------------------------------
+
+            await setDoc(attendanceRef, {
+
+                studentID:
+                    pupilData.studentID,
+
+                studentName:
+                    pupilData.studentName,
+
+                class:
+                    pupilData.class || "",
+
+                academicYear:
+                    pupilData.academicYear || "",
+
+                userPhotoUrl:
+                    pupilData.userPhotoUrl || "",
+
+                schoolId:
+                    currentSchoolId,
+
+                date:
+                    todayStr,
+
+                clockInTime:
+                    null,
+
+                clockOutTime:
+                    null,
+
+                status:
+                    manualStatus,
+
+                note:
+                    manualNote.trim() ||
+                    `Manually recorded as ${manualStatus}.`,
+
+                loggedById:
+                    loggedInUser.id,
+
+                loggedByName:
+                    loggedInUser.name,
+
+                loggedByRole:
+                    loggedInUser.role,
+
+                createdAt:
+                    serverTimestamp(),
+            });
+
+            toast.success(
+                `✅ ${pupilData.studentName} recorded as ${manualStatus}.`
+            );
+
+            // ------------------------------------------
+            // RESET
+            // ------------------------------------------
+
+            setManualStudentID("");
+            setSelectedPupilName("");
+            setManualNote("");
+
+            return;
+        }
+
+        // ==========================================
+        // 6. MANUAL ABSENT
+        // ==========================================
+
+        if (manualStatus === "Absent") {
+
+            // ------------------------------------------
+            // PREVENT DUPLICATE
+            // ------------------------------------------
+
+            if (attSnap.exists()) {
+
+                const existing =
+                    attSnap.data();
+
+                toast.error(
+                    `❌ Action Blocked: ${pupilData.studentName} already has a ${existing.status} attendance record today.`
+                );
+
+                return;
+            }
+
+            // ------------------------------------------
+            // CHECK TIME RULE
+            // ------------------------------------------
+
+            const {
+                status: derivedStatus,
+                allowed,
+                message,
+            } = calculateClockInStatus(now);
+
+            if (!allowed) {
+
+                toast.error(
+                    `❌ ${message}`
+                );
+
+                return;
+            }
+
+            // ------------------------------------------
+            // SAVE ABSENT
+            // ------------------------------------------
+
+            await setDoc(attendanceRef, {
+
+                studentID:
+                    pupilData.studentID,
+
+                studentName:
+                    pupilData.studentName,
+
+                class:
+                    pupilData.class || "",
+
+                academicYear:
+                    pupilData.academicYear || "",
+
+                userPhotoUrl:
+                    pupilData.userPhotoUrl || "",
+
+                schoolId:
+                    currentSchoolId,
+
+                date:
+                    todayStr,
+
+                clockInTime:
+                    nowTime,
+
+                clockOutTime:
+                    null,
+
+                status:
+                    "Absent",
+
+                note:
+                    manualNote.trim() ||
+                    `Manually recorded as Absent at ${nowTime}.`,
+
+                loggedById:
+                    loggedInUser.id,
+
+                loggedByName:
+                    loggedInUser.name,
+
+                loggedByRole:
+                    loggedInUser.role,
+
+                createdAt:
+                    serverTimestamp(),
+            });
+
+            toast.error(
+                `❌ ${pupilData.studentName} marked ABSENT at ${nowTime}.`
+            );
+
+            // ------------------------------------------
+            // RESET
+            // ------------------------------------------
+
+            setManualStudentID("");
+            setSelectedPupilName("");
+            setManualNote("");
+
+            return;
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Error submitting manual attendance:",
+            error
+        );
+
+        toast.error(
+            "Failed to log attendance."
+        );
+
+    } finally {
+
+        setManualSubmitting(false);
+    }
+};
 
     return (
         <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
@@ -603,6 +1303,7 @@ const AttendanceScanner = () => {
                                     className="hidden"
                                 />
                                 <span>📤 Clock OUT</span>
+
                             </label>
                         </div>
 
@@ -661,6 +1362,19 @@ const AttendanceScanner = () => {
                                     </p>
                                     <p>Clock In: <span className="font-semibold text-green-700">{scanResult.time}</span></p>
                                     <p>Clock Out: <span className="font-semibold text-blue-700">{scanResult.clockOutTime}</span></p>
+                                    <p>
+                                        Recorded By:{" "}
+                                        <span className="font-semibold text-indigo-700">
+                                            {scanResult.loggedByName || "--"}
+                                        </span>
+                                    </p>
+
+                                    <p>
+                                        Role:{" "}
+                                        <span className="font-semibold text-gray-700 capitalize">
+                                            {scanResult.loggedByRole || "--"}
+                                        </span>
+                                    </p>
                                 </div>
                             </div>
                         )}
@@ -675,34 +1389,116 @@ const AttendanceScanner = () => {
                             <p className="text-xs text-gray-500">Record leaves, excuses, or official absences manually.</p>
                         </div>
 
-                        {/* Student Dropdown Select */}
-                        <div>
-                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                                Select Student
-                            </label>
-                            <select
-                                value={manualStudentID}
-                                onChange={handlePupilSelect}
-                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                                required
-                                disabled={loadingPupils}
-                            >
-                                <option value="">
-                                    {loadingPupils ? "Loading students..." : "-- Select Student --"}
-                                </option>
-                                {pupilsList.map((p) => (
-                                    <option key={p.id || p.studentID} value={p.studentID}>
-                                        {p.studentName} ({p.studentID})
-                                    </option>
-                                ))}
-                            </select>
 
-                            {selectedPupilName && (
-                                <p className="text-xs font-semibold text-indigo-600 mt-1">
-                                    ✓ Selected: {selectedPupilName} (ID: {manualStudentID})
-                                </p>
-                            )}
-                        </div>
+                        {/* Student Dropdown Select */}
+                       ```jsx
+{/* ========================================== */}
+{/* ACADEMIC YEAR FILTER */}
+{/* ========================================== */}
+
+<div>
+    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+        Academic Year
+    </label>
+
+    <select
+        value={selectedAcademicYear}
+        onChange={(e) => {
+            setSelectedAcademicYear(e.target.value);
+            setSelectedClass("");
+            setManualStudentID("");
+            setSelectedPupilName("");
+        }}
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+    >
+        <option value="">
+            -- All Academic Years --
+        </option>
+
+        {academicYears.map((year) => (
+            <option key={year} value={year}>
+                {year}
+            </option>
+        ))}
+    </select>
+</div>
+
+
+{/* ========================================== */}
+{/* CLASS FILTER */}
+{/* ========================================== */}
+
+<div>
+    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+        Class
+    </label>
+
+    <select
+        value={selectedClass}
+        onChange={(e) => {
+            setSelectedClass(e.target.value);
+            setManualStudentID("");
+            setSelectedPupilName("");
+        }}
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+    >
+        <option value="">
+            -- All Classes --
+        </option>
+
+        {classes.map((className) => (
+            <option key={className} value={className}>
+                {className}
+            </option>
+        ))}
+    </select>
+</div>
+
+
+{/* ========================================== */}
+{/* STUDENT FILTER */}
+{/* ========================================== */}
+
+<div>
+    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+        Select Student
+    </label>
+
+    <select
+        value={manualStudentID}
+        onChange={handlePupilSelect}
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+        required
+        disabled={loadingPupils}
+    >
+        <option value="">
+            {loadingPupils
+                ? "Loading students..."
+                : filteredPupils.length === 0
+                    ? "No students found"
+                    : "-- Select Student --"}
+        </option>
+
+        {filteredPupils.map((p) => (
+            <option
+                key={p.id || p.studentID}
+                value={p.studentID}
+            >
+                {p.studentName} ({p.studentID})
+            </option>
+        ))}
+    </select>
+
+    {selectedPupilName && (
+        <p className="text-xs font-semibold text-indigo-600 mt-1">
+            ✓ Selected: {selectedPupilName}
+            {" "}
+            (ID: {manualStudentID})
+        </p>
+    )}
+</div>
+
+
 
                         {/* Status Selection */}
                         <div>
@@ -714,6 +1510,8 @@ const AttendanceScanner = () => {
                             >
                                 <option value="Excuse">Excuse (Permission Granted)</option>
                                 <option value="Leave">On Leave (Medical / Sick)</option>
+                                <option value="Clockin">Clock-in (No Id Card)</option>
+                                <option value="Clockout">Clock-out (No Id Card)</option>
                                 <option value="Absent">Absent (Unexcused)</option>
                             </select>
                         </div>

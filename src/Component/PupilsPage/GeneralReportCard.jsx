@@ -82,78 +82,138 @@ const GeneralReportCard = () => {
     }, [schoolId, selectedClass]);
 
     // 🔹 Fetch Class Settings (numberOfSubjects)
+    useEffect(() => {
+        if (!selectedClass || !schoolId) return;
+
+        const q = query(
+            collection(db, "Classes"),
+            where("className", "==", selectedClass),
+            where("schoolId", "==", schoolId)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            if (!snapshot.empty) {
+                setClassInfo(snapshot.docs[0].data());
+            } else {
+                setClassInfo(null);
+            }
+        });
+
+        return () => unsubscribe();
+
+    }, [selectedClass, schoolId]);
+
+    // 🔹 Count total pupils in class
+ // 🔹 Count unique historical pupils in class
 useEffect(() => {
-    if (!selectedClass || !schoolId) return;
+    if (!academicYear || !selectedClass || !schoolId) {
+        setTotalPupilsInClass(0);
+        return;
+    }
 
     const q = query(
-        collection(db, "Classes"),
-        where("className", "==", selectedClass),
-        where("schoolId", "==", schoolId)
+        collection(schooldb, "PupilGrades"),
+        where("academicYear", "==", academicYear),
+        where("schoolId", "==", schoolId),
+        where("className", "==", selectedClass)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-        if (!snapshot.empty) {
-            setClassInfo(snapshot.docs[0].data());
-        } else {
-            setClassInfo(null);
+        const pupilIDs = [
+            ...new Set(
+                snapshot.docs
+                    .map(doc => doc.data().pupilID)
+                    .filter(Boolean)
+            )
+        ];
+
+        setTotalPupilsInClass(pupilIDs.length);
+    });
+
+    return () => unsubscribe();
+}, [academicYear, selectedClass, schoolId]);
+
+    // 🔹 Fetch Pupils
+   // 🔹 Fetch Historical Pupils
+useEffect(() => {
+    if (!academicYear || !selectedClass || !schoolId) {
+        setPupils([]);
+        setSelectedPupil("");
+        return;
+    }
+
+    const gradesQuery = query(
+        collection(schooldb, "PupilGrades"),
+        where("schoolId", "==", schoolId),
+        where("academicYear", "==", academicYear),
+        where("className", "==", selectedClass)
+    );
+
+    const unsubscribe = onSnapshot(gradesQuery, async (snapshot) => {
+
+        // Get unique historical pupil IDs
+        const pupilIDs = [
+            ...new Set(
+                snapshot.docs
+                    .map(doc => doc.data().pupilID)
+                    .filter(Boolean)
+            )
+        ];
+
+        if (pupilIDs.length === 0) {
+            setPupils([]);
+            setSelectedPupil("");
+            return;
         }
+
+        // Get current pupil profiles
+        const profilesQuery = query(
+            collection(db, "PupilsReg"),
+            where("schoolId", "==", schoolId)
+        );
+
+        const profileSnapshot = await getDocs(profilesQuery);
+
+        const profiles = profileSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        // Match historical pupil IDs with profiles
+        const historicalPupils = pupilIDs.map((pupilID) => {
+            const profile = profiles.find(
+                p => p.studentID === pupilID
+            );
+
+            return profile || {
+                studentID: pupilID,
+                studentName: `Pupil ${pupilID}`
+            };
+        });
+
+        historicalPupils.sort((a, b) =>
+            (a.studentName || "").localeCompare(
+                b.studentName || ""
+            )
+        );
+
+        setPupils(historicalPupils);
+
+        // Keep selected pupil if still available
+        setSelectedPupil(prev => {
+            const exists = historicalPupils.some(
+                p => p.studentID === prev
+            );
+
+            return exists
+                ? prev
+                : historicalPupils[0]?.studentID || "";
+        });
     });
 
     return () => unsubscribe();
 
-}, [selectedClass, schoolId]);
-
-    // 🔹 Count total pupils in class
-    useEffect(() => {
-        const trimmedClass = selectedClass;
-        if (!academicYear || !trimmedClass || !schoolId) {
-            setTotalPupilsInClass(0);
-            return;
-        }
-
-        const pupilsRef = query(
-            collection(db, "PupilsReg"),
-            where("academicYear", "==", academicYear),
-            where("schoolId", "==", schoolId)
-        );
-
-        const unsubscribe = onSnapshot(pupilsRef, (snapshot) => {
-            const total = snapshot.docs
-                .filter(doc => doc.data().class && doc.data().class.trim() === trimmedClass)
-                .length;
-
-            setTotalPupilsInClass(total);
-        });
-
-        return () => unsubscribe();
-    }, [academicYear, selectedClass, schoolId]);
-
-    // 🔹 Fetch Pupils
-    useEffect(() => {
-        const trimmedClass = selectedClass;
-        if (!academicYear || !trimmedClass || !schoolId) {
-            setPupils([]);
-            return;
-        }
-        setSelectedPupil("");
-
-        const q = query(
-            collection(db, "PupilsReg"),
-            where("schoolId", "==", schoolId),
-            where("academicYear", "==", academicYear),
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const allPupilData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-            const filteredPupils = allPupilData
-                .filter(pupil => pupil.class && pupil.class.trim() === trimmedClass)
-                .sort((a, b) => a.studentName.localeCompare(b.studentName));
-
-            setPupils(filteredPupils);
-            if (filteredPupils.length > 0) setSelectedPupil(filteredPupils[0].studentID);
-        });
-        return () => unsubscribe();
-    }, [academicYear, selectedClass, schoolId]);
+}, [academicYear, selectedClass, schoolId]);
 
     // 🔹 Fetch ALL grades for the class to dynamically generate ranks
     useEffect(() => {
@@ -208,17 +268,16 @@ useEffect(() => {
         const subjectAnnualRanks = calculateSubjectAnnualRanks(classGradesData, pupilIDs, uniqueSubjects, calculationMode);
 
         // Compute total metrics using shared utils engine
-       const totalNumberOfSubjects = Number(
-    classInfo?.numberOfSubjects || uniqueSubjects.length
-);
+        const totalNumberOfSubjects = Number(
+            classInfo?.numberOfSubjects || uniqueSubjects.length
+        );
 
 
-const { termSummaries, annualSummary } = calculateOverallMetrics(
+        const { termSummaries, annualSummary } = calculateOverallMetrics(
     classGradesData,
     pupilIDs,
     uniqueSubjects,
     selectedPupil,
-    totalNumberOfSubjects * 100,
     calculationMode
 );
 
@@ -237,6 +296,9 @@ const { termSummaries, annualSummary } = calculateOverallMetrics(
                 t3Data.rawMean,
                 calculationMode
             );
+
+
+
 
             const annualRank = subjectAnnualRanks[subj]?.[selectedPupil] || "—";
 
@@ -269,17 +331,47 @@ const { termSummaries, annualSummary } = calculateOverallMetrics(
         }).filter(row =>
             row.t1.mean !== "—" || row.t2.mean !== "—" || row.t3.mean !== "—"
         );
+        const annualTotal = reportRows.reduce((sum, row) => {
+            return sum + (Number(row.annualAverage) || 0);
+        }, 0);
 
-        return { reportRows, termSummaries, annualSummary };
+
+        return {
+            reportRows,
+            termSummaries,
+            annualSummary,
+            annualTotal
+        };
     }, [pupilGradesData, classGradesData, selectedPupil, calculationMode]);
+    const formatDOB = (dob) => {
+        if (!dob) return "N/A";
 
-    // Rest of your file component (handlePrintPDF, render code, etc.) is unchanged
+        let date;
+
+        // Firestore Timestamp
+        if (dob?.toDate) {
+            date = dob.toDate();
+        }
+        // JavaScript Date
+        else if (dob instanceof Date) {
+            date = dob;
+        }
+        // String
+        else {
+            date = new Date(dob);
+        }
+
+        if (isNaN(date.getTime())) return "N/A";
+
+        return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+    };
     // 🧾 Generate Professional Three-Term PDF with Custom Prints
     const handlePrintPDF = () => {
         if (!pupilInfo) return;
 
         const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "A4" });
         const pupilPhotoUrl = pupilInfo.userPhotoUrl || "https://via.placeholder.com/96";
+        const formattedDOB = formatDOB(pupilInfo.dob);
 
         const loadImage = (url) =>
             new Promise((resolve) => {
@@ -370,10 +462,12 @@ const { termSummaries, annualSummary } = calculateOverallMetrics(
 
             // Profile Block
             doc.setFillColor(248, 250, 252);
-            doc.rect(40, y, pageWidth - 80, 42, "F");
+            doc.rect(40, y, pageWidth - 80, 58, "F");
             doc.setDrawColor(203, 213, 225);
             doc.setLineWidth(0.5);
-            doc.rect(40, y, pageWidth - 80, 42, "S");
+            doc.rect(40, y, pageWidth - 80, 58, "S");
+
+
 
             doc.setFontSize(8.5);
             doc.setTextColor(100, 116, 139);
@@ -381,11 +475,12 @@ const { termSummaries, annualSummary } = calculateOverallMetrics(
 
             doc.text("PUPIL NAME:", 55, y + 16);
             doc.text("STUDENT ID:", 55, y + 30);
+            doc.text("DATE OF BIRTH:", 55, y + 44);
 
             doc.setFont("Helvetica", "normal");
-            doc.setTextColor(30, 41, 59);
             doc.text(pupilInfo.studentName.toUpperCase(), 130, y + 16);
             doc.text(pupilInfo.studentID, 130, y + 30);
+            doc.text(formattedDOB, 130, y + 44);
 
             doc.setFont("Helvetica", "bold");
             doc.setTextColor(100, 116, 139);
@@ -394,7 +489,7 @@ const { termSummaries, annualSummary } = calculateOverallMetrics(
 
             doc.setFont("Helvetica", "normal");
             doc.setTextColor(30, 41, 59);
-            doc.text(`${pupilInfo.class || "N/A"} (${totalPupilsInClass} pupils) | ${academicYear}`, pageWidth / 2 + 70, y + 16);
+            doc.text(`${selectedClass || "N/A"} (${totalPupilsInClass} pupils) | ${academicYear}`, pageWidth / 2 + 70, y + 16);
             doc.text("Three-Term Complete Comprehensive Report Card", pageWidth / 2 + 70, y + 30);
 
             y += 55;
@@ -513,24 +608,32 @@ const { termSummaries, annualSummary } = calculateOverallMetrics(
             doc.setFont("Helvetica", "normal");
             doc.setTextColor(30, 41, 59);
 
-            doc.text("Annual Weighted Average Score:", 50, currentY + 28);
-            doc.text("Final Position in Class:", 50, currentY + 43);
-            doc.text("Promoted To / Repeat:", 50, currentY + 70);
+            doc.text("Annual Overall Total:", 50, currentY + 28);
+            doc.text("Annual Weighted Average:", 50, currentY + 43);
+            doc.text("Final Position in Class:", 50, currentY + 58);
+            doc.text("Promoted To / Repeat:", 50, currentY + 73);
 
             doc.setFont("Helvetica", "bold");
             doc.setTextColor(79, 70, 229);
 
             doc.text(
-                `${reportCardData.annualSummary.avg}%`,
+                `${reportCardData.annualTotal}`,
                 pageWidth / 2 - 55,
                 currentY + 28,
                 { align: "right" }
             );
 
             doc.text(
-                `${reportCardData.annualSummary.rank} / ${totalPupilsInClass}`,
+                `${reportCardData.annualSummary.avg}%`,
                 pageWidth / 2 - 55,
                 currentY + 43,
+                { align: "right" }
+            );
+
+            doc.text(
+                `${reportCardData.annualSummary.rank} / ${totalPupilsInClass}`,
+                pageWidth / 2 - 55,
+                currentY + 58,
                 { align: "right" }
             );
 
@@ -540,7 +643,7 @@ const { termSummaries, annualSummary } = calculateOverallMetrics(
             doc.text(
                 ".........................................................",
                 165,
-                currentY + 70
+                currentY + 73
             );
             // ===============================
             // RIGHT PANEL: ATTENDANCE TRACKER
@@ -779,7 +882,7 @@ const { termSummaries, annualSummary } = calculateOverallMetrics(
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100 mb-6 text-xs">
                         <div>
                             <span className="block text-[10px] font-bold text-slate-400 uppercase">Class Stream</span>
-                            <span className="font-semibold text-slate-700">{pupilInfo.class || "N/A"}</span>
+                            <span className="font-semibold text-slate-700">{selectedClass || "N/A"}</span>
                         </div>
                         <div>
                             <span className="block text-[10px] font-bold text-slate-400 uppercase">Demographics</span>
@@ -876,7 +979,9 @@ const { termSummaries, annualSummary } = calculateOverallMetrics(
                                             <td colSpan="2" className="border-r border-slate-200"></td>
                                             <td className="py-2.5 border-r border-slate-200 text-slate-800">{reportCardData.termSummaries["Term 3"]?.total}</td>
                                             <td className="border-r border-slate-200"></td>
-                                            <td className="py-2.5 border-r border-slate-200"></td>
+                                            <td className="py-2.5 border-r border-slate-200 font-bold text-indigo-800 bg-indigo-50/50">
+                                                {reportCardData.annualTotal}
+                                            </td>
                                             <td className="border-r border-slate-200"></td>
                                             <td></td>
                                         </tr>

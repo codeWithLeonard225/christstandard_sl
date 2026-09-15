@@ -258,8 +258,8 @@ const PupilIDCard = () => {
                                         {pupil.studentName}
                                     </div>
                                     <div><strong>ID:</strong> {pupil.studentID}</div>
-                                    <div><strong>Class:</strong> {pupil.class}</div>
-                                    <div><strong>Type:</strong> {pupil.pupilType || "Pupil"}</div>
+                                   <div><strong>Class:</strong> {pupil.class?.slice(0, 3)}</div>
+                                    {/* <div><strong>Type:</strong> {pupil.pupilType || "Pupil"}</div> */}
                                 </div>
                             </div>
 
