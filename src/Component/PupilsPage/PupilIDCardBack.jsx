@@ -395,11 +395,11 @@ const PupilIDCardBack = () => {
               }}
             >
               <img
-                src="/images/img.png"
+                src="/images/modelJuniorSign.png"
                 alt="ID Card Background"
                 style={{
                   position: "absolute",
-                  top: "50px",
+                  top: "10px",
                   left: 0,
                   width: "100%",
                   height: "100%",
@@ -411,7 +411,7 @@ const PupilIDCardBack = () => {
               {/* SCHOOL HEADER */}
               <div
                 style={{
-                  width: "100%",
+                  width: "90%",
                   display: "flex",
                   position: "relative",
                   zIndex: 1,

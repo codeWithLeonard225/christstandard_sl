@@ -145,7 +145,7 @@ const NAV_ITEMS = [
     icon: <MdBarChart />,
     children: [
       // { key: "PupilIDCardScan", label: "Pupil Card Scan", icon: <MdPerson /> },
-      { key: "PupilIDCardBack", label: "Pupil Card Back", icon: <MdPerson /> },
+      // { key: "PupilIDCardBack", label: "Pupil Card Back", icon: <MdPerson /> },
       { key: "PupilAttendanceScanner", label: "Attendance Scanner", icon: <MdPerson /> },
       { key: "PupilAttendanceLogs", label: "Pupil Attendance Logs", icon: <MdPerson /> },
     ],
@@ -284,7 +284,7 @@ function AdminPanel() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case "dashboard": return <FeesDashboard />;
+      case "dashboard": return <RegDashboard />;
       case "Form": return <Registration />;
       case "class": return <ClassRegistration />;
       case "classList": return <StudentFilterPage />;

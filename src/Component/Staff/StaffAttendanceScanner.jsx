@@ -112,27 +112,36 @@ const schoolId =
 };
 
     useEffect(() => {
-        const html5QrCode = new Html5Qrcode("reader-viewfinder");
-        html5QrCodeRef.current = html5QrCode;
+    const html5QrCode = new Html5Qrcode("reader-viewfinder");
+    html5QrCodeRef.current = html5QrCode;
 
-        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
 
+    // Pass strict MediaTrackConstraints directly to facingMode
+    html5QrCode.start(
+        { facingMode: { exact: "environment" } }, // Use exact back camera without querying device lists
+        config,
+        (decodedText) => { handleScanSuccess(decodedText); },
+        () => { }
+    ).catch((err) => {
+        // Fallback to standard environment facingMode if 'exact' is restricted on desktop/laptop webcams
         html5QrCode.start(
             { facingMode: "environment" },
             config,
             (decodedText) => { handleScanSuccess(decodedText); },
             () => { }
-        ).catch((err) => {
-            console.error("Failed to start camera:", err);
-            toast.error("Could not access camera permission.");
+        ).catch((fallbackErr) => {
+            console.error("Failed to start camera:", fallbackErr);
+            toast.error("Could not access the rear camera.");
         });
+    });
 
-        return () => {
-            if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-                html5QrCodeRef.current.stop().catch(e => console.error("Stop failed", e));
-            }
-        };
-    }, []);
+    return () => {
+        if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+            html5QrCodeRef.current.stop().catch(e => console.error("Stop failed", e));
+        }
+    };
+}, []);
 
     const isAttendanceLocked = (record) => {
         return record?.isFinal === true;
