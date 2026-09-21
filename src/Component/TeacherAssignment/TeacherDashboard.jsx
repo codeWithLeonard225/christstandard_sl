@@ -63,11 +63,11 @@ const getNavItems = (teacherInfo) => {
       label: `Form Class: ${teacherInfo.assignClass || "N/A"}`,
       icon: <MdLibraryBooks />,
       children: [
-        { key: "FormMasterGradeSheet", label: "Submitted Grades" },
-        { key: "GradeSheet", label: "GradeSheet" },
-        { key: "TermResult", label: "Term Sheet" },
-        { key: "YearlyResult", label: "Yearly Result" },
-        { key: "ReportCard", label: "Report Card" },
+        // { key: "FormMasterGradeSheet", label: "Submitted Grades" },
+        // { key: "GradeSheet", label: "GradeSheet" },
+        // { key: "TermResult", label: "Term Sheet" },
+        // { key: "YearlyResult", label: "Yearly Result" },
+        // { key: "ReportCard", label: "Report Card" },
         { key: "PupilAttendanceLogs", label: "Pupil AttendanceLogs " },
       ],
     });
