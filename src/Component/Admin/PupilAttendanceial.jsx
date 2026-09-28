@@ -71,6 +71,7 @@ import PupilIDCardScan from "../PupilsPage/PupilIDCardScan";
 import PupilAttendanceScanner from "../PupilsPage/PupilAttendanceScanner";
 import PupilAttendanceLogs from "../PupilsPage/PupilAttendanceLogs";
 import PupilIDCardBack from "../PupilsPage/PupilIDCardBack";
+import ManualAttendanceFormMaster from "../PupilsPage/ManualAttendanceFormMaster";
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
@@ -147,6 +148,7 @@ const NAV_ITEMS = [
       // { key: "PupilIDCardScan", label: "Pupil Card Scan", icon: <MdPerson /> },
     //   { key: "PupilIDCardBack", label: "Pupil Card Back", icon: <MdPerson /> },
       { key: "PupilAttendanceScanner", label: "Attendance Scanner", icon: <MdPerson /> },
+      { key: "PupilAttendanceManuel", label: "Attendance Manuel", icon: <MdPerson /> },
       { key: "PupilAttendanceLogs", label: "Pupil Attendance Logs", icon: <MdPerson /> },
     ],
   },
@@ -210,16 +212,6 @@ const NAV_ITEMS = [
     icon: <MdWarning />, // 📖
   },
 
-  //  {
-  //   key: "CopyPupilGrades",
-  //   label: "CopyPupilGrades",
-  //   icon: <MdWarning />, // 📖
-  // },
-  //  {
-  //   key: "FixClassNames",
-  //   label: "FixClassNamesInP_Grade",
-  //   icon: <MdWarning />, // 📖
-  // },
 ];
 
 // --- Button component ---
@@ -335,6 +327,7 @@ function AdminPanel() {
       case "TeacherIDCardsBack": return <TeacherIDCardsBack />;
       case "StaffPayroll": return <StaffPayroll />;
       case "AdminForm": return <AdminForm />;
+      case "ManualAttendanceFormMaster": return <ManualAttendanceFormMaster />;
 
       default: return <Placeholder title={activeTab} />;
     }

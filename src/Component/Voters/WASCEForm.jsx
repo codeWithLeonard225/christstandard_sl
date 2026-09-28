@@ -191,56 +191,56 @@ const WasceReg = () => {
 
 
     const handleFileUpload = async (e, fieldType) => {
-    const file = e.target.files[0];
-    if (!file) return;
+        const file = e.target.files[0];
+        if (!file) return;
 
-    setUploadingField(fieldType);
+        setUploadingField(fieldType);
 
-    try {
-        // ✅ 1. SHOW INSTANT PREVIEW (VERY IMPORTANT)
-        const previewUrl = URL.createObjectURL(file);
+        try {
+            // ✅ 1. SHOW INSTANT PREVIEW (VERY IMPORTANT)
+            const previewUrl = URL.createObjectURL(file);
 
-        setFormData(prev => ({
-            ...prev,
-            [fieldType === "pupil" ? "pupilPhoto" : "beceResultPhoto"]: previewUrl
-        }));
+            setFormData(prev => ({
+                ...prev,
+                [fieldType === "pupil" ? "pupilPhoto" : "beceResultPhoto"]: previewUrl
+            }));
 
-        // ✅ 2. COMPRESS IMAGE
-        const compressedFile = await imageCompression(file, {
-            maxSizeMB: 1,
-            maxWidthOrHeight: 1024,
-            useWebWorker: true,
-        });
+            // ✅ 2. COMPRESS IMAGE
+            const compressedFile = await imageCompression(file, {
+                maxSizeMB: 1,
+                maxWidthOrHeight: 1024,
+                useWebWorker: true,
+            });
 
-        // ✅ 3. UPLOAD TO CLOUDINARY
-        const uploadData = new FormData();
-        uploadData.append("file", compressedFile);
-        uploadData.append("upload_preset", UPLOAD_PRESET);
+            // ✅ 3. UPLOAD TO CLOUDINARY
+            const uploadData = new FormData();
+            uploadData.append("file", compressedFile);
+            uploadData.append("upload_preset", UPLOAD_PRESET);
 
-        const res = await fetch(
-            `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-            {
-                method: "POST",
-                body: uploadData,
-            }
-        );
+            const res = await fetch(
+                `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+                {
+                    method: "POST",
+                    body: uploadData,
+                }
+            );
 
-        const data = await res.json();
+            const data = await res.json();
 
-        // ✅ 4. REPLACE PREVIEW WITH REAL URL
-        setFormData(prev => ({
-            ...prev,
-            [fieldType === "pupil" ? "pupilPhoto" : "beceResultPhoto"]: data.secure_url
-        }));
+            // ✅ 4. REPLACE PREVIEW WITH REAL URL
+            setFormData(prev => ({
+                ...prev,
+                [fieldType === "pupil" ? "pupilPhoto" : "beceResultPhoto"]: data.secure_url
+            }));
 
-        toast.success("Image uploaded!");
-    } catch (err) {
-        console.error(err);
-        toast.error("Upload failed");
-    } finally {
-        setUploadingField(null);
-    }
-};
+            toast.success("Image uploaded!");
+        } catch (err) {
+            console.error(err);
+            toast.error("Upload failed");
+        } finally {
+            setUploadingField(null);
+        }
+    };
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (formData.selectedSubjects.length < 9) {
@@ -420,7 +420,7 @@ const WasceReg = () => {
         addLine("Full Name", stu.studentName);
         addLine("Faculty", stu.faculty);
         addLine("Gender", stu.gender);
-        addLine("DOB", stu.dob);
+        addLine("Date of Birth", formatDOB(stu.dob));
         addLine("Age", stu.age);
         addLine("Address", stu.address);
         addLine("Mobile", stu.mobileNumber);
@@ -467,6 +467,13 @@ const WasceReg = () => {
         }
 
         const doc = new jsPDF({ orientation: "landscape" });
+
+        // 1. SORT ALPHABETICALLY BY NAME
+    const sortedStudents = [...students].sort((a, b) => {
+        const nameA = a.studentName?.toLowerCase() || "";
+        const nameB = b.studentName?.toLowerCase() || "";
+        return nameA.localeCompare(nameB);
+    });
 
         // 🖼 Helper to load image
         const loadImage = (url) =>
@@ -520,9 +527,12 @@ const WasceReg = () => {
         y += 10;
 
         // 👥 TOTAL COUNT
-        doc.setFontSize(10);
-        doc.setFont(undefined, "normal");
-        doc.text(`Total Students: ${students.length}`, 20, y);
+        // 2. USE THE SORTED LIST FOR TOTAL COUNT
+    doc.setFontSize(10);
+    doc.setFont(undefined, "normal");
+    doc.text(`Total Students: ${sortedStudents.length}`, 20, y);
+
+    y += 5;
 
         y += 5;
 
@@ -538,21 +548,23 @@ const WasceReg = () => {
         };
 
         // 📊 TABLE DATA
-        const tableData = students.map((stu, index) => {
-            const { surname, otherNames } = splitName(stu.studentName);
+    // 3. MAP FROM sortedStudents INSTEAD OF students
+    const tableData = sortedStudents.map((stu, index) => {
+        const { surname, otherNames } = splitName(stu.studentName);
 
-            return [
-                index + 1,
-                surname,
-                otherNames,
-                stu.gender || "",
-                stu.beceYear || "",
-                stu.beceIndexNo || "",
-                stu.address || "",
-                stu.mobileNumber || "",
-                stu.previousSchool || ""
-            ];
-        });
+      return [
+    index + 1,
+    surname,
+    otherNames,
+    stu.gender || "",
+    formatDOB(stu.dob),
+    stu.beceYear || "",
+    stu.beceIndexNo || "",
+    stu.address || "",
+    stu.mobileNumber || "",
+    stu.previousSchool || ""
+];
+    });
 
         // 📋 HEADERS
         const headers = [[
@@ -560,6 +572,7 @@ const WasceReg = () => {
             "Surname",
             "Other Name",
             "Sex",
+            "Date of Birth",
             "BECE Year",
             "Index Number",
             "Address",
@@ -582,27 +595,42 @@ const WasceReg = () => {
                 textColor: [255, 255, 255],
                 fontStyle: "bold"
             },
-            columnStyles: {
-                0: { cellWidth: 20 },
-                1: { cellWidth: 40 },
-                2: { cellWidth: 50 },
-                3: { cellWidth: 25 },
-                4: { cellWidth: 30 },
-                5: { cellWidth: 50 },
-                6: { cellWidth: 70 },
-                7: { cellWidth: 45 },
-                8: { cellWidth: 60 }
-            }
+           columnStyles: {
+    0: { cellWidth: 15 }, // No
+    1: { cellWidth: 35 }, // Surname
+    2: { cellWidth: 45 }, // Other Name
+    3: { cellWidth: 20 }, // Sex
+    4: { cellWidth: 28 }, // Date of Birth
+    5: { cellWidth: 25 }, // BECE Year
+    6: { cellWidth: 40 }, // Index Number
+    7: { cellWidth: 55 }, // Address
+    8: { cellWidth: 40 }, // Mobile
+    9: { cellWidth: 55 }  // Previous School
+}
         });
 
         // 💾 SAVE
         doc.save("WASSCE_General_Report.pdf");
     };
 
-    const filteredStudents = students.filter(s =>
+ const filteredStudents = students
+    .filter(s =>
         s.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.beceIndexNo?.includes(searchTerm)
-    );
+    )
+    .sort((a, b) => {
+        const nameA = a.studentName?.toLowerCase() || "";
+        const nameB = b.studentName?.toLowerCase() || "";
+        return nameA.localeCompare(nameB);
+    });
+
+    const formatDOB = (dateString) => {
+    if (!dateString) return "";
+
+    const date = new Date(dateString);
+
+    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+};
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -837,14 +865,14 @@ const WasceReg = () => {
                     </div>
                 </form>
 
-              {showCamera && (
-  <CameraCapture
-    key={cameraTarget + Date.now()} // 🔥 FORCE NEW INSTANCE
-    setPhoto={handleCameraCapture}
-    onClose={() => setShowCamera(false)}
-    initialFacingMode="environment"
-  />
-)}
+                {showCamera && (
+                    <CameraCapture
+                        key={cameraTarget + Date.now()} // 🔥 FORCE NEW INSTANCE
+                        setPhoto={handleCameraCapture}
+                        onClose={() => setShowCamera(false)}
+                        initialFacingMode="environment"
+                    />
+                )}
 
                 {/* REGISTERED STUDENTS TABLE */}
                 <div className="mt-12">

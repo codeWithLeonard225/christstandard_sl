@@ -24,6 +24,7 @@ import BankFeesPage from "./BankFeesPage";
 import FeeReceipt from "../FeeReceipt.jsx/FeeReceipt";
 import FeesCostPage from "../FeeReceipt.jsx/FeesCostPage";
 import FeesDashboard from "../Dashboard/FeesDsahboard";
+import AttendanceDashboard from "../Dashboard/AttendanceDashboard";
 import SubjectPage from "../SubjectPage/SubjectPage";
 import TeacherAssignmentPage from "../TeacherAssignment/TeacherAssignmentPage";
 import TeacherRegistration from "../Voters/TeacherRegistration";
@@ -71,9 +72,22 @@ import PupilIDCardScan from "../PupilsPage/PupilIDCardScan";
 import PupilAttendanceScanner from "../PupilsPage/PupilAttendanceScanner";
 import PupilAttendanceLogs from "../PupilsPage/PupilAttendanceLogs";
 import PupilIDCardBack from "../PupilsPage/PupilIDCardBack";
+import WASCEForm from "../Voters/WASCEForm";
+import PupilPhotoManager from "../Voters/PupilPhotoManager";
+import PupilPhotoEditor from "../Voters/PupilPhotoEditor";
+import ManualAttendance from "../PupilsPage/ManualAttendanceFormMaster";
+import TeacherPhotoEditor from "../Voters/TeacherPhotoEditor";
+import TeacherPhotoManager from "../Voters/TeacherPhotoManager";
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
+    {
+    key: "AttendanceDashboard",
+    label: "Pupil Attendance",
+    icon: <MdWarning />, // 📖
+  },
+  
+  
   {
     key: "forms",
     label: "Registeration",
@@ -83,7 +97,8 @@ const NAV_ITEMS = [
       { key: "class", label: " Class", icon: <MdPerson /> },
       { key: "classList", label: "Class List", icon: <MdPerson /> },
       { key: "ClassPromotion", label: " ClassPromotion", icon: <MdPerson /> },
-      { key: "AdminForm", label: " AdminForm", icon: <MdPerson /> },
+      // { key: "AdminForm", label: " AdminForm", icon: <MdPerson /> },
+          { key: "WASCEForm", label: "Wasce Entering", icon: <MdPerson /> },
     ],
   },
   {
@@ -135,10 +150,24 @@ const NAV_ITEMS = [
     children: [
       { key: "beceResult", label: "Bece Result Entering", icon: <MdPerson /> },
       { key: "beceReport", label: "Bece Result Report", icon: <MdPerson /> },
+   
 
 
     ],
   },
+
+  //   {
+  //   key: "editPhotos",
+  //   label: "Edit id card photos",
+  //   icon: <MdBarChart />,
+  //   children: [
+  //     { key: "TeacherPhotoManager", label: "Teacher Zoom & Crop", icon: <MdPerson /> },
+  //     { key: "TeacherPhotoEditor", label: "Remove Bg", icon: <MdPerson /> },
+  //     { key: "PupilPhotoManager", label: "Pupil Zoom & Crop", icon: <MdPerson /> },
+  //     { key: "PupilPhotoEditor", label: "Remove Bg pupil", icon: <MdPerson /> },
+  //   ],
+  // },
+ 
   {
     key: "qrcode-Pupil",
     label: "Qr code Attendance-Pupil",
@@ -147,6 +176,7 @@ const NAV_ITEMS = [
       // { key: "PupilIDCardScan", label: "Pupil Card Scan", icon: <MdPerson /> },
       // { key: "PupilIDCardBack", label: "Pupil Card Back", icon: <MdPerson /> },
       { key: "PupilAttendanceScanner", label: "Attendance Scanner", icon: <MdPerson /> },
+          { key: "ManualAttendance", label: "Manual Attendance", icon: <MdPerson /> },
       { key: "PupilAttendanceLogs", label: "Pupil Attendance Logs", icon: <MdPerson /> },
     ],
   },
@@ -163,28 +193,6 @@ const NAV_ITEMS = [
     ],
   },
 
-  // {
-  //   key: "pupilAttendance",
-  //   label: "Pupil Attendance",
-  //   icon: <MdWarning />, // 📖
-  // },
-
-  // {
-  //   key: "staffAttendance",
-  //   label: "Staff Attendance",
-  //   icon: <MdWarning />, // 📖
-  // },
-
-  // {
-  //   key: "StaffAttendanceProfileReport",
-  //   label: "Staff Attendance Report",
-  //   icon: <MdWarning />, // 📖
-  // },
-  //   {
-  //   key: "StaffAttendanceHistory",
-  //   label: "StaffAttendanceHistory",
-  //   icon: <MdWarning />, // 📖
-  // },
 
   {
     key: "timetable",
@@ -285,6 +293,7 @@ function AdminPanel() {
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard": return <RegDashboard />;
+      case "AttendanceDashboard": return <AttendanceDashboard />;
       case "Form": return <Registration />;
       case "class": return <ClassRegistration />;
       case "classList": return <StudentFilterPage />;
@@ -335,6 +344,13 @@ function AdminPanel() {
       case "TeacherIDCardsBack": return <TeacherIDCardsBack />;
       case "StaffPayroll": return <StaffPayroll />;
       case "AdminForm": return <AdminForm />;
+      case "WASCEForm": return <WASCEForm />;
+            case "ManualAttendance": return <ManualAttendance />;
+      case "TeacherPhotoManager": return <TeacherPhotoManager />;
+      case "TeacherPhotoEditor": return <TeacherPhotoEditor />;
+        case "PupilPhotoManager": return <PupilPhotoManager />;
+      case "PupilPhotoEditor": return <PupilPhotoEditor />;
+
 
       default: return <Placeholder title={activeTab} />;
     }
