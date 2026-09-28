@@ -97,7 +97,7 @@ const NAV_ITEMS = [
       { key: "class", label: " Class", icon: <MdPerson /> },
       { key: "classList", label: "Class List", icon: <MdPerson /> },
       { key: "ClassPromotion", label: " ClassPromotion", icon: <MdPerson /> },
-      // { key: "AdminForm", label: " AdminForm", icon: <MdPerson /> },
+      { key: "AdminForm", label: " AdminForm", icon: <MdPerson /> },
           { key: "WASCEForm", label: "Wasce Entering", icon: <MdPerson /> },
     ],
   },
