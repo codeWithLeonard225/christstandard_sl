@@ -34,16 +34,28 @@ import GeneralReportCard from "../PupilsPage/GeneralReportCard";
 import StudentFilterPage from "../Voters/StudentFilterPage";
 import LogoutPage from "../Admin/LogoutPage"
 import FeesReport from "../Admin/FeesReport"
+import StaffAttendanceReport from "../Staff/StaffAttendanceReport";
+import AttendanceReport from "../Dashboard/AttendanceReports";
 
 
 // --- Navigation Items ---
 const NAV_ITEMS = [
+
+     {
+    key: "attendanceReport",
+    label: "Attendance Report",
+    icon: <MdEdit />,
+    children: [
+      { key: "AttendanceReport", label: " Pupils Attendance", icon: <MdPerson /> },
+      { key: "StaffAttendanceReport", label: " Staff Attendance", icon: <MdPerson /> },
+    ],
+  },
   
-       {
-      key: "GradeADashboard",
-      label: "Grade A Pupils",
-      icon: <MdWarning />, // 📖
-    },
+    //    {
+    //   key: "GradeADashboard",
+    //   label: "Grade A Pupils",
+    //   icon: <MdWarning />, // 📖
+    // },
      {
       key: "ResultDashboard",
       label: "Results Dashboard",
